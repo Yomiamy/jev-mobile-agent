@@ -1,9 +1,9 @@
 ---
-name: gen-syn-mobile-mcp
+name: gen-sync-mobile-mcp
 description: |
   當使用者要把上游 mobile-mcp（https://github.com/mobile-next/mobile-mcp）的最新程式碼
   同步進本 repository 時使用。可指定上游 tag（如 1.0.5），未指定則同步 upstream/main。
-  觸發條件：gen-syn-mobile-mcp [tag]、同步 mobile-mcp、更新 mobile-mcp 上游、sync upstream mobile-mcp
+  觸發條件：gen-sync-mobile-mcp [tag]、同步 mobile-mcp、更新 mobile-mcp 上游、sync upstream mobile-mcp
 allow-tools:
   - Bash
 ---
