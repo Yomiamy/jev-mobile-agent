@@ -1,0 +1,38 @@
+{
+  "cbm-reindex-on-sync": {
+    "PreInvocation": null,
+    "PostInvocation": null,
+    "Stop": null,
+    "PreToolUse": null,
+    "PostToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PWD/hooks/cbm-reindex-on-sync.sh",
+            "timeout": 0
+          }
+        ]
+      }
+    ]
+  },
+  "wf-guard-stage-check": {
+    "PreInvocation": null,
+    "PostInvocation": null,
+    "Stop": null,
+    "PreToolUse": [
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PWD/hooks/wf-guard-stage-check.sh",
+            "timeout": 0
+          }
+        ]
+      }
+    ],
+    "PostToolUse": null
+  }
+}
