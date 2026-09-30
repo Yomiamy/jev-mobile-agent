@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { buildRequest, chooseElement, isConfident, parseAnswer } from "../src/jev";
-import { ActionableError, ScreenElement } from "../src/robot";
+import fs from "node:fs";
+import path from "node:path";
+
+import { buildRequest, chooseElement, isConfident, parseAnswer, tapByDescription } from "../src/jev";
+import { ActionableError, Robot, ScreenElement } from "../src/robot";
 
 const screen = { width: 1080, height: 2400 };
 const elements: ScreenElement[] = [
@@ -88,5 +91,85 @@ test.describe("chooseElement request failures tap nothing", () => {
 
 	test("body that is not json", async () => {
 		await expectFailure(async () => new Response("<html>", { status: 200 }), "TypeSafe request failed");
+	});
+});
+
+test.describe("tapByDescription", () => {
+	const realFetch = globalThis.fetch;
+	const screenshot = fs.readFileSync(path.join(__dirname, "fixtures", "baseline.jpg"));
+
+	test.afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	const answerWith = (choice: string, confidence: number) => {
+		globalThis.fetch = async () => new Response(JSON.stringify({
+			answers: { element: { choice, confidence, probabilities: { [choice]: confidence } } },
+		}));
+	};
+
+	const fakeRobot = (overrides: Partial<Robot> = {}) => {
+		const taps: string[] = [];
+		let dumps = 0;
+		const robot = {
+			getScreenSize: async () => ({ ...screen, scale: 1 }),
+			getElementsOnScreen: async () => {
+				dumps++;
+				return elements;
+			},
+			getScreenshot: async () => screenshot,
+			tapByRef: async (ref: string) => {
+				taps.push(ref);
+			},
+			tap: async (x: number, y: number) => {
+				taps.push(`${x},${y}`);
+			},
+			...overrides,
+		} as unknown as Robot;
+		return { robot, taps, dumps: () => dumps };
+	};
+
+	test("taps the chosen element by ref", async () => {
+		answerWith("2", 0.95);
+		const { robot, taps } = fakeRobot();
+		const result = await tapByDescription(robot, "登出");
+		expect(taps).toEqual(["@e2"]);
+		expect(result).toContain("Tapped @e2 Button \"登出\"");
+	});
+
+	test("taps the center of an element without a ref", async () => {
+		answerWith("3", 0.95);
+		const { robot, taps } = fakeRobot();
+		await tapByDescription(robot, "我的位置");
+		expect(taps).toEqual(["219,1088"]);
+	});
+
+	test("taps nothing when Jev is not confident", async () => {
+		answerWith("1", 0.2);
+		const { robot, taps } = fakeRobot();
+		const error = await tapByDescription(robot, "設定").catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		expect(error.message).toContain("Nothing tapped");
+		expect(taps).toEqual([]);
+	});
+
+	test("reads the screen again when the chosen ref went stale", async () => {
+		answerWith("2", 0.95);
+		let first = true;
+		const taps: string[] = [];
+		const { robot, dumps } = fakeRobot({
+			tapByRef: async (ref: string) => {
+				if (first) {
+					first = false;
+					throw new Error(`ref ${ref} not found on current screen; refs come from the latest 'dump ui'`);
+				}
+
+				taps.push(ref);
+			},
+		});
+		const result = await tapByDescription(robot, "登出");
+		expect(dumps()).toBe(2);
+		expect(taps).toEqual(["@e2"]);
+		expect(result).toContain("after the screen changed");
 	});
 });

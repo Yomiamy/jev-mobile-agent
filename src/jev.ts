@@ -1,4 +1,6 @@
-import { ActionableError, Dimensions, ScreenElement } from "./robot";
+import { compactElements } from "./compact-elements";
+import { isOcrSupported, withOcrElements } from "./ocr";
+import { ActionableError, Dimensions, Robot, ScreenElement } from "./robot";
 
 const TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -137,4 +139,55 @@ export const chooseElement = async (target: string, elements: ScreenElement[], s
 	}
 
 	return parseAnswer(body?.answers?.element, elements);
+};
+
+const MAX_TAP_ATTEMPTS = 2;
+
+const describeElement = (element: ScreenElement): string => {
+	const { x, y } = centerOf(element);
+	const name = element.text || element.label?.split("\n")[0] || element.name || element.identifier || "";
+	return `${element.ref ? `${element.ref} ` : ""}${shortType(element.type)} "${name}" at ${x},${y}`;
+};
+
+/**
+ * Reads the screen, lets Jev pick the element matching `target` (adding OCR
+ * text when the tree has no confident match) and taps it. Taps nothing when
+ * unsure; reads the screen once more when the chosen ref went stale.
+ */
+export const tapByDescription = async (robot: Robot, target: string): Promise<string> => {
+	const screen = await robot.getScreenSize();
+
+	for (let attempt = 1; ; attempt++) {
+		const tree = await robot.getElementsOnScreen();
+		let source = "accessibility tree";
+		let choice = await chooseElement(target, compactElements(tree, screen), screen);
+		if (!isConfident(choice) && isOcrSupported()) {
+			source = "accessibility tree + OCR";
+			choice = await chooseElement(target, compactElements(await withOcrElements(robot, tree), screen), screen);
+		}
+
+		const element = choice.element;
+		if (!element || !isConfident(choice)) {
+			const closest = choice.ranked.map(c => `${describeElement(c.element)} (${c.probability.toFixed(2)})`).join(", ") || "none";
+			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}`);
+		}
+
+		try {
+			if (element.ref && robot.tapByRef) {
+				await robot.tapByRef(element.ref);
+			} else {
+				const { x, y } = centerOf(element);
+				await robot.tap(x, y);
+			}
+		} catch (err: any) {
+			// the screen changed between reading it and tapping, read it again rather than tap a stale target
+			if (attempt < MAX_TAP_ATTEMPTS && /not found on current screen/.test(String(err?.message))) {
+				continue;
+			}
+
+			throw err;
+		}
+
+		return `Tapped ${describeElement(element)} (confidence ${choice.confidence.toFixed(2)}, from ${source}${attempt > 1 ? ", after the screen changed" : ""})`;
+	}
 };
