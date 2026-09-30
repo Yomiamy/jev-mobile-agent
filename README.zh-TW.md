@@ -85,27 +85,50 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
 
-在 FindRestaurant 上，5 個目標全部點對（包含靠位置找到的純圖示按鈕，以及靠 OCR 找到的側選單項目）；畫面上不存在的那個目標被拒絕，而不是亂猜。
-
-**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊這個工具，一切維持原樣。
+**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊這個工具，一切維持原樣。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
 
 ```bash
-claude mcp add -e TYPESAFE_API_KEY=<你的 key> jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements
+claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision
 ```
 
-`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
+共用的 `.mcp.json` 不要寫入 key，改為引用環境變數：`"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`。`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
 
 > **隱私**：`mobile_tap` 會把畫面上元素的文字（使用 OCR 時連同 OCR 文字）送到 TypeSafe。畫面可能含有帳號 email 等個人資料，請只在可接受的情境啟用。
 
-限制：不在無障礙樹裡的圖示找不到（OCR 只讀文字）。信心門檻 0.5 是手動訂的，應依實測紀錄調整。每次點擊的時間大多花在 `dump ui`（某些畫面要好幾秒），而不是 Jev（每次請求約 0.3 秒）。
+限制：
+
+- 不在無障礙樹裡的圖示找不到（OCR 只讀文字）。
+- 畫面上有兩個相同的目標（例如桌面和 dock 上同一個 app 圖示）時，機率會被分散而拒絕點擊；請把描述寫得更具體，例如加上位置。
+- 沒有 label 的按鈕只能靠位置判斷，信心偏低（實測 0.60–0.66）。在 app 端補上 `tooltip` / `Semantics(label:)` 即可改善。
+- 信心門檻 0.5 是手動訂的，應依實測紀錄調整。
+
+設計、方案取捨與完整測試紀錄：[規格](docs/features/2026-10-01-jev-tap.md) · [計畫](docs/plans/2026-10-01-jev-tap.md)。
 
 ## 實測
 
-以 Flutter app「FindRestaurant」在 Pixel 6 模擬器上跑 11 步流程（開 app → 捲動 → 開側選單 → 關鍵字過濾 → 取消 → 我的位置 → 等待重新載入）：
+以 Flutter app「FindRestaurant」在 Pixel 6 模擬器上跑 11 步流程（開 app → 捲動 → 開側選單 → 關鍵字過濾 → 取消 → 我的位置 → 等待重新載入），兩種方式都在 120 秒限制內完成：
 
-- 側選單項目在無障礙樹中**完全不存在**，兩次都靠 OCR 一次取得正確座標並點中。
-- 全程 **0 次截圖**，77 秒完成，無重試。
+| | OCR，由 agent 選目標 | `mobile_tap`，由 Jev 選目標 |
+|---|---:|---:|
+| 總耗時 | 77 秒 | 89 秒 |
+| 重試 | 0 | 1（兩個相同的 app 圖示） |
+| 回傳給 agent 的工具結果（估算） | ≈ 49,600 字元 | ≈ 8,500 字元（−80%） |
+| 截圖 | 0 | 0 |
+
+- 側選單項目在無障礙樹中**完全不存在**，每次都靠 OCR 找到，Jev 選中它們的信心為 0.92–0.95。
 - OCR 與無障礙樹對同一元素的中心點誤差約 8px。
+- 用 Jev 並沒有比較快，因為每次 `mobile_tap` 都要重新讀取畫面，而這個 app 讀取畫面很慢（見下方）。Jev 本身每次請求約 0.3 秒。token 有一部分是轉移而不是省下：改由 Jev 讀元素表，而 Jev 端的用量目前還沒記錄。
+
+### Flutter debug build 為什麼讀取畫面很慢
+
+對可除錯的 Flutter app，mobilecli（1.0.16）不使用 Android 的無障礙 dump，而是透過 Dart VM service 走訪整棵 render tree：每個 render object 要 10–25 次呼叫，而且連畫面外預先渲染的列、背後的前一頁都會走訪。沒有任何選項可以關閉這條路徑。
+
+| 情況 | `dump ui` 耗時 |
+|---|---:|
+| 原生畫面（launcher） | 0.7 秒 |
+| Flutter debug build（VM service 走訪） | 6.3–10.2 秒 |
+
+改用 profile 或 release build 時，mobilecli 會改走無障礙 dump，應該會快很多，而且會把按鈕的 tooltip 帶出來當 label；這點還沒實際量測。
 
 ## 限制
 

@@ -85,27 +85,50 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 
 Jev can only pick an observed element, so the model never makes up coordinates. The agent sends one short phrase instead of reading 3,000–7,000 characters of element list per step.
 
-On FindRestaurant, 5/5 targets were tapped correctly (including an icon-only button found by position and side-menu items found through OCR), and the one target that was not on screen was refused rather than guessed.
-
-**Setup**: without `TYPESAFE_API_KEY` the tool is not registered and nothing changes.
+**Setup**: without `TYPESAFE_API_KEY` the tool is not registered and nothing changes. `mobile_tap` lives on the `feat/jev-decision` branch. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
 
 ```bash
-claude mcp add -e TYPESAFE_API_KEY=<your key> jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements
+claude mcp add jev-mobile -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision
 ```
 
-`TYPESAFE_MODEL` overrides the model (default `jev-latest`).
+For a shared `.mcp.json`, reference the variable instead of committing the key: `"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`. `TYPESAFE_MODEL` overrides the model (default `jev-latest`).
 
 > **Privacy**: `mobile_tap` sends the text of the on-screen elements (and OCR text when used) to TypeSafe. Screens can contain personal data such as account emails; enable it only where that is acceptable.
 
-Limits: icons missing from the accessibility tree cannot be found (OCR reads text only). The confidence threshold (0.5) is hand-picked and should be tuned on recorded runs. Most of the time per tap is spent in `dump ui` (several seconds on some screens), not in Jev (about 0.3 s per request).
+Limits:
+
+- Icons missing from the accessibility tree cannot be found (OCR reads text only).
+- Two identical targets on screen (e.g. the same app icon on the home screen and in the dock) split the probability and are refused; describe the target more precisely, e.g. by position.
+- Buttons without a label are picked by position only, with lower confidence (0.60–0.66 in the field test). A `tooltip` / `Semantics(label:)` in the app fixes that.
+- The confidence threshold (0.5) is hand-picked and should be tuned on recorded runs.
+
+Design, trade-offs and full test records: [spec](docs/features/2026-10-01-jev-tap.md) · [plan](docs/plans/2026-10-01-jev-tap.md).
 
 ## Field test
 
-An 11-step flow on the Flutter app "FindRestaurant" on a Pixel 6 emulator (open app → scroll → open side menu → keyword filter → cancel → my location → wait for reload):
+An 11-step flow on the Flutter app "FindRestaurant" on a Pixel 6 emulator (open app → scroll → open side menu → keyword filter → cancel → my location → wait for reload), each run within the 120-second budget:
 
-- The side menu items are **entirely absent** from the accessibility tree; both times OCR returned the right coordinates on the first try.
-- **Zero screenshots**, finished in 77 seconds with no retries.
+| | OCR, agent picks targets | `mobile_tap`, Jev picks targets |
+|---|---:|---:|
+| Total time | 77 s | 89 s |
+| Retries | 0 | 1 (two identical app icons) |
+| Tool results returned to the agent (estimate) | ≈ 49,600 chars | ≈ 8,500 chars (−80%) |
+| Screenshots | 0 | 0 |
+
+- The side menu items are **entirely absent** from the accessibility tree; OCR found them every time, and Jev picked them with confidence 0.92–0.95.
 - OCR and the accessibility tree agree on an element's center to within about 8px.
+- The Jev run is not faster because every `mobile_tap` reads the screen again, and reading is slow on this app (see below). Jev itself takes about 0.3 s per request. The tokens are partly moved rather than saved: Jev reads the element list instead of the agent, and its usage is not recorded yet.
+
+### Why reading the screen is slow on Flutter debug builds
+
+For a debuggable Flutter app, mobilecli (1.0.16) does not use the Android accessibility dump. It walks the whole render tree over the Dart VM service, with 10–25 calls per render object, including rows rendered off screen and routes behind the current one. There is no option to turn this off.
+
+| Case | `dump ui` time |
+|---|---:|
+| Native screen (launcher) | 0.7 s |
+| Flutter debug build (VM service walk) | 6.3–10.2 s |
+
+A profile or release build makes mobilecli fall back to the accessibility dump, which should be much faster and also exposes button tooltips as labels; this is not measured yet.
 
 ## Limitations
 
