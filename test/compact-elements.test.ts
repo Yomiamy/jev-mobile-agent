@@ -18,6 +18,13 @@ test("drops elements outside the screen, including a previous route shifted off 
 	expect(kept.map(e => e.ref)).toEqual(["@e1", "@e4"]);
 });
 
+test("keeps the right half of a landscape screen when the robot reports the portrait size", () => {
+	const kept = compactElements([
+		el({ ref: "@e1", text: "right side in landscape", rect: { x: 1500, y: 300, width: 200, height: 80 } }),
+	], screen);
+	expect(kept.map(e => e.ref)).toEqual(["@e1"]);
+});
+
 test("drops empty containers but keeps icon-only buttons", () => {
 	const kept = compactElements([
 		el({ ref: "@e1", type: "ConstrainedBox", rect: { x: 0, y: 0, width: 1080, height: 2400 } }),

@@ -5,9 +5,13 @@ const INTERACTIVE_TYPE = /Button|EditText|TextField|SearchField|Switch|CheckBox|
 
 const isKnown = (screen: Dimensions): boolean => screen.width > 0 && screen.height > 0;
 
+// some robots report the portrait size while elements come in the current
+// orientation, so bound both axes by the long edge; below the fold and a route
+// shifted off to the left are still dropped
 const isOnScreen = (element: ScreenElement, screen: Dimensions): boolean => {
 	const { x, y, width, height } = element.rect;
-	return x < screen.width && y < screen.height && x + width > 0 && y + height > 0;
+	const edge = Math.max(screen.width, screen.height);
+	return x < edge && y < edge && x + width > 0 && y + height > 0;
 };
 
 const hasContent = (element: ScreenElement): boolean =>
