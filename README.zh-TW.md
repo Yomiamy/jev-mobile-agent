@@ -35,6 +35,8 @@ take_screenshot                    ← 模型目測（最後手段）
 | `src/server.ts` | `mobile_list_elements_on_screen` 新增 `ocr` 參數；樹為空時提示改用 `ocr: true` |
 | `src/format-elements.ts` | 沒有 ref 的元素（OCR 結果、legacy 模式）輸出中心點 `tap=x,y` |
 | `skills/mobile-automation/SKILL.md` | 告訴 agent 何時該用 OCR |
+| `src/compact-elements.ts` | 精簡元素清單（只留畫面內、去掉空容器、重複 label 只留一次），長度約減少 60% |
+| `src/jev.ts` | `mobile_tap` 背後的 Jev 元素選擇（選用，見下方） |
 
 ### `ocr` 參數
 
@@ -64,6 +66,38 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 - 上一次 list 找不到要點的文字 → 帶 `ocr: true` 重新 list。
 - 無障礙樹完全為空時，回傳內容會附上 `Retry with ocr: true` 提示。
+
+## 用 Jev 依描述點擊（選用）
+
+設定 [TypeSafe](https://docs.typesafe.ai) API key 後，server 會多註冊一個 `mobile_tap`。agent 只要描述要點什麼，不必讀完整的元素清單，由 TypeSafe 的 System One 模型 [Jev](https://docs.typesafe.ai/introduction) 選出元素（做法同 [jev-ultrafast](https://github.com/browser-use/jev-ultrafast)）。
+
+```jsonc
+// mobile_tap
+{ "device": "Pixel_6", "target": "左上角的選單按鈕" }
+// → Tapped @e65 Button "" at 74,202 (confidence 0.88, from accessibility tree)
+```
+
+1. 讀取無障礙樹並精簡：去掉畫面外的元素與空容器，子節點重複的 label 只留一次。
+2. 問 Jev 哪個元素符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。
+3. 找不到或信心不足 → 加上 OCR 元素再問一次。
+4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，讓 agent 改用 `mobile_list_elements_on_screen`。
+5. 讀取與點擊之間畫面變了（ref 失效）→ 重新讀取並重試一次。
+
+Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
+
+在 FindRestaurant 上，5 個目標全部點對（包含靠位置找到的純圖示按鈕，以及靠 OCR 找到的側選單項目）；畫面上不存在的那個目標被拒絕，而不是亂猜。
+
+**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊這個工具，一切維持原樣。
+
+```bash
+claude mcp add -e TYPESAFE_API_KEY=<你的 key> jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements
+```
+
+`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
+
+> **隱私**：`mobile_tap` 會把畫面上元素的文字（使用 OCR 時連同 OCR 文字）送到 TypeSafe。畫面可能含有帳號 email 等個人資料，請只在可接受的情境啟用。
+
+限制：不在無障礙樹裡的圖示找不到（OCR 只讀文字）。信心門檻 0.5 是手動訂的，應依實測紀錄調整。每次點擊的時間大多花在 `dump ui`（某些畫面要好幾秒），而不是 Jev（每次請求約 0.3 秒）。
 
 ## 實測
 
