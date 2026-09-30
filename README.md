@@ -35,7 +35,7 @@ take_screenshot                    ← model eyeballs it (last resort)
 | `src/server.ts` | New `ocr` parameter on `mobile_list_elements_on_screen`; an empty tree hints to retry with `ocr: true` |
 | `src/format-elements.ts` | Elements without a ref (OCR results, legacy mode) get a center point `tap=x,y` |
 | `skills/mobile-automation/SKILL.md` | Tells the agent when to use OCR |
-| `src/compact-elements.ts` | Compacts the element list (on-screen only, no empty containers, repeated labels once), about 60% shorter |
+| `src/compact-elements.ts` | Compacts the element list for every user, with or without a TypeSafe key: on-screen only, no empty containers, a repeated multi-line (merged) label once; about 60% shorter |
 | `src/jev.ts` | Jev element choice behind `mobile_tap` (optional, see below) |
 
 ### The `ocr` parameter
@@ -77,7 +77,7 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 // → Tapped @e65 Button "" at 74,202 (confidence 0.88, from accessibility tree)
 ```
 
-1. Read the accessibility tree and compact it: drop off-screen elements and empty containers, keep a label repeated by child nodes only once.
+1. Read the accessibility tree and compact it: drop off-screen elements and empty containers, keep a multi-line (merged) label repeated by child nodes only once.
 2. Ask Jev which element matches `target` (one Choice question: one option per element, plus NONE).
 3. No match or low confidence → add OCR elements and ask once more.
 4. Still no confident match → **nothing is tapped**; the closest candidates are returned so the agent can fall back to `mobile_list_elements_on_screen`.
@@ -85,7 +85,7 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 
 Jev can only pick an observed element, so the model never makes up coordinates. The agent sends one short phrase instead of reading 3,000–7,000 characters of element list per step.
 
-**Setup**: without `TYPESAFE_API_KEY` the tool is not registered and nothing changes. `mobile_tap` lives on the `feat/jev-decision` branch. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
+**Setup**: without `TYPESAFE_API_KEY`, `mobile_tap` is not registered and nothing is sent to TypeSafe. `mobile_tap` lives on the `feat/jev-decision` branch. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
 
 ```bash
 claude mcp add jev-mobile -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision

@@ -35,7 +35,7 @@ take_screenshot                    ← 模型目測（最後手段）
 | `src/server.ts` | `mobile_list_elements_on_screen` 新增 `ocr` 參數；樹為空時提示改用 `ocr: true` |
 | `src/format-elements.ts` | 沒有 ref 的元素（OCR 結果、legacy 模式）輸出中心點 `tap=x,y` |
 | `skills/mobile-automation/SKILL.md` | 告訴 agent 何時該用 OCR |
-| `src/compact-elements.ts` | 精簡元素清單（只留畫面內、去掉空容器、重複 label 只留一次），長度約減少 60% |
+| `src/compact-elements.ts` | 精簡元素清單，有沒有 TypeSafe key 都會生效：只留畫面內、去掉空容器、重複的多行（合併）label 只留一次，長度約減少 60% |
 | `src/jev.ts` | `mobile_tap` 背後的 Jev 元素選擇（選用，見下方） |
 
 ### `ocr` 參數
@@ -77,7 +77,7 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 // → Tapped @e65 Button "" at 74,202 (confidence 0.88, from accessibility tree)
 ```
 
-1. 讀取無障礙樹並精簡：去掉畫面外的元素與空容器，子節點重複的 label 只留一次。
+1. 讀取無障礙樹並精簡：去掉畫面外的元素與空容器，子節點重複的多行（合併）label 只留一次。
 2. 問 Jev 哪個元素符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。
 3. 找不到或信心不足 → 加上 OCR 元素再問一次。
 4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，讓 agent 改用 `mobile_list_elements_on_screen`。
@@ -85,7 +85,7 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
 
-**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊這個工具，一切維持原樣。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
+**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊 `mobile_tap`，也不會送出任何資料到 TypeSafe。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
 
 ```bash
 claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision
