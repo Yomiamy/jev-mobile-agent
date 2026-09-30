@@ -37,6 +37,11 @@ const formatElementAsText = (element: ScreenElement): string => {
 	parts.push(`at=${element.rect.x},${element.rect.y}`);
 	parts.push(`size=${element.rect.width}x${element.rect.height}`);
 
+	// without a ref the element can only be tapped by coordinates, so hand over the center
+	if (!element.ref) {
+		parts.push(`tap=${Math.round(element.rect.x + element.rect.width / 2)},${Math.round(element.rect.y + element.rect.height / 2)}`);
+	}
+
 	// only emit non-default states, otherwise don't confuse llm
 	if (element.focused) {
 		parts.push("focused");
@@ -94,7 +99,7 @@ const formatElementAsJson = (element: ScreenElement): any => {
 	return out;
 };
 
-const TEXT_HEADER = "One element per line: @ref Type text= label= name= value= id= at=x,y size=WxH [focused] [selected] [checked] [disabled]";
+const TEXT_HEADER = "One element per line: @ref Type text= label= name= value= id= at=x,y size=WxH [tap=x,y when no ref] [focused] [selected] [checked] [disabled]";
 
 export const formatElements = (elements: ScreenElement[], format: ElementsFormat): string => {
 	if (format === "json") {
