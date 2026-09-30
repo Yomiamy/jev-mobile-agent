@@ -21,8 +21,10 @@ prefixed `mobile_`.
    simulator booted or device paired).
 2. **See the screen.** Prefer `mobile_list_elements_on_screen` — it returns
    the accessibility tree with element labels and coordinates. It is faster,
-   cheaper, and more reliable than screenshots. Fall back to
-   `mobile_take_screenshot` only when elements are missing or you need visual
+   cheaper, and more reliable than screenshots. If the text you want to tap
+   is missing, list again with `ocr: true` (macOS only) and tap the `tap=x,y`
+   of the matching `OcrText`; OCR reads text only, not icons. Fall back to
+   `mobile_take_screenshot` only when elements are still missing or you need visual
    confirmation (games, canvas-drawn UI, image content).
 3. **Act.** `mobile_click_on_screen_at_coordinates`, `mobile_swipe_on_screen`,
    `mobile_type_keys`, `mobile_press_button` (HOME, BACK, VOLUME, ENTER),
