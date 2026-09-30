@@ -19,15 +19,14 @@ import { validateOutputPath, validateFileExtension } from "./utils";
 import { formatElements } from "./format-elements";
 import { isOcrSupported, withOcrElements } from "./ocr";
 import { compactElements } from "./compact-elements";
-import { centerOf, chooseElement, isConfident, isJevEnabled } from "./jev";
+import { centerOf, chooseElement, isConfident, isJevEnabled, shortType } from "./jev";
 
 const MAX_TAP_ATTEMPTS = 2;
 
 const describeTapped = (element: ScreenElement): string => {
 	const { x, y } = centerOf(element);
 	const name = element.text || element.label?.split("\n")[0] || element.name || element.identifier || "";
-	const type = element.type.substring(element.type.lastIndexOf(".") + 1);
-	return `${element.ref ? `${element.ref} ` : ""}${type} "${name}" at ${x},${y}`;
+	return `${element.ref ? `${element.ref} ` : ""}${shortType(element.type)} "${name}" at ${x},${y}`;
 };
 
 type ScreenshotContent = { type: "text", text: string } | { type: "image", data: string, mimeType: string };

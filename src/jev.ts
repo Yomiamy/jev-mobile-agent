@@ -28,7 +28,7 @@ export const centerOf = (element: ScreenElement): { x: number; y: number } => ({
 	y: Math.round(element.rect.y + element.rect.height / 2),
 });
 
-const shortType = (type: string): string => type.substring(type.lastIndexOf(".") + 1);
+export const shortType = (type: string): string => type.substring(type.lastIndexOf(".") + 1);
 
 const describe = (element: ScreenElement) => ({
 	type: shortType(element.type),
