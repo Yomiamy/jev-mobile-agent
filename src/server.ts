@@ -18,6 +18,7 @@ import { MobileDevice } from "./mobile-device";
 import { validateOutputPath, validateFileExtension } from "./utils";
 import { formatElements } from "./format-elements";
 import { isOcrSupported, withOcrElements } from "./ocr";
+import { compactElements } from "./compact-elements";
 
 type ScreenshotContent = { type: "text", text: string } | { type: "image", data: string, mimeType: string };
 
@@ -723,6 +724,7 @@ export const createMcpServer = (): McpServer => {
 				elements = await withOcrElements(robot, elements);
 			}
 
+			elements = compactElements(elements, await robot.getScreenSize());
 			const result = formatElements(elements, format);
 			if (elements.length === 0 && !ocr && isOcrSupported()) {
 				return `${result}\nNo elements found in the accessibility tree. Retry with ocr: true to read text off the screen.`;
