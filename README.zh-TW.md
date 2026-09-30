@@ -101,7 +101,7 @@ claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomi
 - 畫面上有兩個相同的目標（例如桌面和 dock 上同一個 app 圖示）時，機率會被分散而拒絕點擊；請把描述寫得更具體，例如加上位置。
 - 沒有 label 的按鈕只能靠位置判斷，信心偏低（實測 0.60–0.66）。在 app 端補上 `tooltip` / `Semantics(label:)` 即可改善。
 - 信心門檻 0.5 是手動訂的，應依實測紀錄調整。
-- 只有用 ref 點擊時才有過期防護（mobilecli 會拒絕過期的 ref）。OCR 元素和 legacy robot 是用座標點擊，點擊前不會重新確認。
+- 只有用 ref 點擊時，畫面變了才可能被擋下（mobilecli 會回報不在目前畫面上的 ref；但它是否能抓到每一種變化，取決於 mobilecli 怎麼編號 ref，這點尚未確認）。OCR 元素和 legacy robot 是用座標點擊，點擊前不會重新確認。
 
 設計、方案取捨與完整測試紀錄：[規格](docs/features/2026-10-01-jev-tap.md) · [計畫](docs/plans/2026-10-01-jev-tap.md)。
 

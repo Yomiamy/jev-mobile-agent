@@ -16,6 +16,8 @@ const hasContent = (element: ScreenElement): boolean =>
 // flutter merged semantics joins the texts of a subtree with newlines and repeats
 // that label on every node below; a native content-desc such as a per-row
 // "More options" is one line and names each button on its own
+// ponytail: dedup is screen-wide, so two cards with identical merged labels keep it
+// only on the first; scope it to the owning subtree if that ever shows up
 const isMergedLabel = (label: string): boolean => label.includes("\n");
 
 /**
