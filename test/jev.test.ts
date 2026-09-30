@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { buildRequest, isConfident, parseAnswer } from "../src/jev";
-import { ScreenElement } from "../src/robot";
+import { buildRequest, chooseElement, isConfident, parseAnswer } from "../src/jev";
+import { ActionableError, ScreenElement } from "../src/robot";
 
 const screen = { width: 1080, height: 2400 };
 const elements: ScreenElement[] = [
@@ -38,4 +38,48 @@ test("NONE and low confidence do not count as a match", () => {
 test("rejects an answer that points at no observed element", () => {
 	expect(() => parseAnswer({ choice: "9", confidence: 1, probabilities: { "9": 1 } }, elements)).toThrow("invalid answer");
 	expect(() => parseAnswer(undefined, elements)).toThrow("invalid answer");
+});
+
+test("rejects malformed answers instead of crashing", () => {
+	for (const choice of ["1.0", " 1", "0x1", "0"]) {
+		expect(() => parseAnswer({ choice, confidence: 1, probabilities: { "1": 1 } }, elements)).toThrow("invalid answer");
+	}
+
+	expect(() => parseAnswer({ choice: "1", confidence: NaN, probabilities: { "1": 1 } }, elements)).toThrow("invalid answer");
+	expect(() => parseAnswer({ choice: "1", confidence: 1, probabilities: null as any }, elements)).toThrow("invalid answer");
+});
+
+test.describe("chooseElement request failures tap nothing", () => {
+	const realFetch = globalThis.fetch;
+	test.afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	const expectFailure = async (fetchImpl: typeof fetch, message: string) => {
+		globalThis.fetch = fetchImpl;
+		const error = await chooseElement("登出", elements, screen).catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		expect(error.message).toContain(message);
+		expect(error.message).toContain("nothing was tapped");
+	};
+
+	test("timeout", async () => {
+		await expectFailure(async () => {
+			throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+		}, "timeout");
+	});
+
+	test("network failure", async () => {
+		await expectFailure(async () => {
+			throw new TypeError("fetch failed");
+		}, "fetch failed");
+	});
+
+	test("HTTP error status", async () => {
+		await expectFailure(async () => new Response("busy", { status: 503 }), "HTTP 503");
+	});
+
+	test("body that is not json", async () => {
+		await expectFailure(async () => new Response("<html>", { status: 200 }), "TypeSafe request failed");
+	});
 });

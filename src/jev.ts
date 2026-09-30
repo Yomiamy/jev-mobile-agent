@@ -69,24 +69,28 @@ export const buildRequest = (target: string, elements: ScreenElement[], screen: 
 	};
 };
 
+// the exact option keys buildRequest wrote, so "1.0" or " 1" never map onto an element
+const elementForOption = (option: string, elements: ScreenElement[]): ScreenElement | undefined =>
+	/^[1-9]\d*$/.test(option) ? elements[Number(option) - 1] : undefined;
+
 export const parseAnswer = (answer: ChoiceAnswer | undefined, elements: ScreenElement[]): ElementChoice => {
 	const valid = answer
-		&& (answer.choice === NONE || elements[Number(answer.choice) - 1] !== undefined)
-		&& typeof answer.confidence === "number"
+		&& (answer.choice === NONE || elementForOption(answer.choice, elements) !== undefined)
+		&& Number.isFinite(answer.confidence)
+		&& answer.probabilities !== null
 		&& typeof answer.probabilities === "object";
 	if (!valid) {
 		throw new ActionableError("TypeSafe returned an invalid answer, nothing was tapped");
 	}
 
 	const ranked = Object.entries(answer.probabilities)
-		.filter(([option]) => option !== NONE)
-		.sort(([, a], [, b]) => b - a)
-		.slice(0, CANDIDATES_SHOWN)
-		.map(([option, probability]) => ({ element: elements[Number(option) - 1], probability }))
-		.filter(candidate => candidate.element !== undefined);
+		.map(([option, probability]) => ({ element: elementForOption(option, elements), probability }))
+		.filter((candidate): candidate is { element: ScreenElement; probability: number } => candidate.element !== undefined)
+		.sort((a, b) => b.probability - a.probability)
+		.slice(0, CANDIDATES_SHOWN);
 
 	return {
-		element: answer.choice === NONE ? null : elements[Number(answer.choice) - 1],
+		element: answer.choice === NONE ? null : elementForOption(answer.choice, elements) ?? null,
 		confidence: answer.confidence,
 		ranked,
 	};
@@ -104,20 +108,32 @@ export const chooseElement = async (target: string, elements: ScreenElement[], s
 		return { element: null, confidence: 0, ranked: [] };
 	}
 
-	const response = await fetch(TYPESAFE_URL, {
-		method: "POST",
-		headers: {
-			"Authorization": `Bearer ${process.env.TYPESAFE_API_KEY}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(buildRequest(target, elements, screen)),
-		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-	});
+	const request = buildRequest(target, elements, screen);
+	let body: { answers?: { element?: ChoiceAnswer } };
+	try {
+		const response = await fetch(TYPESAFE_URL, {
+			method: "POST",
+			headers: {
+				"Authorization": `Bearer ${process.env.TYPESAFE_API_KEY}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(request),
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+		});
 
-	if (!response.ok) {
-		throw new ActionableError(`TypeSafe returned HTTP ${response.status}, nothing was tapped`);
+		if (!response.ok) {
+			throw new ActionableError(`TypeSafe returned HTTP ${response.status}, nothing was tapped`);
+		}
+
+		body = await response.json();
+	} catch (err: any) {
+		if (err instanceof ActionableError) {
+			throw err;
+		}
+
+		// timeout, network failure or a body that is not json
+		throw new ActionableError(`TypeSafe request failed (${err?.message ?? err}), nothing was tapped`);
 	}
 
-	const body = await response.json() as { answers?: { element?: ChoiceAnswer } };
 	return parseAnswer(body.answers?.element, elements);
 };
