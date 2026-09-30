@@ -47,6 +47,9 @@ test("rejects malformed answers instead of crashing", () => {
 
 	expect(() => parseAnswer({ choice: "1", confidence: NaN, probabilities: { "1": 1 } }, elements)).toThrow("invalid answer");
 	expect(() => parseAnswer({ choice: "1", confidence: 1, probabilities: null as any }, elements)).toThrow("invalid answer");
+
+	const choice = parseAnswer({ choice: "2", confidence: 0.9, probabilities: { "1": "x" as any, "2": 0.9 } }, elements);
+	expect(choice.ranked.map(c => c.element)).toEqual([elements[1]]);
 });
 
 test.describe("chooseElement request failures tap nothing", () => {
@@ -77,6 +80,10 @@ test.describe("chooseElement request failures tap nothing", () => {
 
 	test("HTTP error status", async () => {
 		await expectFailure(async () => new Response("busy", { status: 503 }), "HTTP 503");
+	});
+
+	test("json null body", async () => {
+		await expectFailure(async () => new Response("null", { status: 200 }), "invalid answer");
 	});
 
 	test("body that is not json", async () => {

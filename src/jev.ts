@@ -85,7 +85,8 @@ export const parseAnswer = (answer: ChoiceAnswer | undefined, elements: ScreenEl
 
 	const ranked = Object.entries(answer.probabilities)
 		.map(([option, probability]) => ({ element: elementForOption(option, elements), probability }))
-		.filter((candidate): candidate is { element: ScreenElement; probability: number } => candidate.element !== undefined)
+		.filter((candidate): candidate is { element: ScreenElement; probability: number } =>
+			candidate.element !== undefined && Number.isFinite(candidate.probability))
 		.sort((a, b) => b.probability - a.probability)
 		.slice(0, CANDIDATES_SHOWN);
 
@@ -135,5 +136,5 @@ export const chooseElement = async (target: string, elements: ScreenElement[], s
 		throw new ActionableError(`TypeSafe request failed (${err?.message ?? err}), nothing was tapped`);
 	}
 
-	return parseAnswer(body.answers?.element, elements);
+	return parseAnswer(body?.answers?.element, elements);
 };
