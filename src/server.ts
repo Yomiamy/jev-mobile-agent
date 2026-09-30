@@ -8,7 +8,7 @@ import { ChildProcess } from "node:child_process";
 
 import { error, trace } from "./logger";
 import { AndroidRobot, AndroidDeviceManager } from "./android";
-import { ActionableError, Dimensions, Robot, ScreenshotOptions } from "./robot";
+import { ActionableError, Dimensions, Robot, ScreenElement, ScreenshotOptions } from "./robot";
 import { IosManager, IosRobot } from "./ios";
 import { PNG } from "./png";
 import { getJpegDimensions } from "./jpeg";
@@ -19,6 +19,16 @@ import { validateOutputPath, validateFileExtension } from "./utils";
 import { formatElements } from "./format-elements";
 import { isOcrSupported, withOcrElements } from "./ocr";
 import { compactElements } from "./compact-elements";
+import { centerOf, chooseElement, isConfident, isJevEnabled } from "./jev";
+
+const MAX_TAP_ATTEMPTS = 2;
+
+const describeTapped = (element: ScreenElement): string => {
+	const { x, y } = centerOf(element);
+	const name = element.text || element.label?.split("\n")[0] || element.name || element.identifier || "";
+	const type = element.type.substring(element.type.lastIndexOf(".") + 1);
+	return `${element.ref ? `${element.ref} ` : ""}${type} "${name}" at ${x},${y}`;
+};
 
 type ScreenshotContent = { type: "text", text: string } | { type: "image", data: string, mimeType: string };
 
@@ -733,6 +743,57 @@ export const createMcpServer = (): McpServer => {
 			return result;
 		}
 	);
+
+	if (isJevEnabled()) {
+		tool(
+			"mobile_tap",
+			"Tap By Description",
+			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (accessibility tree, then OCR if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped and the closest candidates are returned; fall back to mobile_list_elements_on_screen then. Icons missing from the accessibility tree cannot be found this way.",
+			{
+				device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
+				target: z.string().min(1).describe("Short description of the element to tap: its text, label, role, or position"),
+			},
+			{ readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+			async ({ device, target }) => {
+				const robot = getRobotFromDevice(device);
+				const screen = await robot.getScreenSize();
+
+				for (let attempt = 1; ; attempt++) {
+					const tree = await robot.getElementsOnScreen();
+					let source = "accessibility tree";
+					let choice = await chooseElement(target, compactElements(tree, screen), screen);
+					if (!isConfident(choice) && isOcrSupported()) {
+						source = "accessibility tree + OCR";
+						choice = await chooseElement(target, compactElements(await withOcrElements(robot, tree), screen), screen);
+					}
+
+					const element = choice.element;
+					if (!element || !isConfident(choice)) {
+						const closest = choice.ranked.map(c => `${describeTapped(c.element)} (${c.probability.toFixed(2)})`).join(", ") || "none";
+						throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}`);
+					}
+
+					try {
+						if (element.ref && robot.tapByRef) {
+							await robot.tapByRef(element.ref);
+						} else {
+							const { x, y } = centerOf(element);
+							await robot.tap(x, y);
+						}
+					} catch (err: any) {
+						// the screen changed between reading it and tapping, read it again rather than tap a stale target
+						if (attempt < MAX_TAP_ATTEMPTS && /not found on current screen/.test(String(err?.message))) {
+							continue;
+						}
+
+						throw err;
+					}
+
+					return `Tapped ${describeTapped(element)} (confidence ${choice.confidence.toFixed(2)}, from ${source}${attempt > 1 ? ", after the screen changed" : ""})`;
+				}
+			}
+		);
+	}
 
 	tool(
 		"mobile_press_button",

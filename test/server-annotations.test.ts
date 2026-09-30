@@ -38,6 +38,8 @@ const expectedAnnotations: ToolAnnotationMatrix = {
 	mobile_list_crashes: { readOnlyHint: true, openWorldHint: true },
 	mobile_get_crash: { readOnlyHint: true, openWorldHint: true },
 	mobile_batch_commands: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+	// registered only when a TypeSafe key is configured
+	...(process.env.TYPESAFE_API_KEY ? { mobile_tap: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } } : {}),
 };
 
 test("describes every tool's side effects and interaction domain", async () => {
