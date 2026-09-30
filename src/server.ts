@@ -17,6 +17,7 @@ import { Mobilecli } from "./mobilecli";
 import { MobileDevice } from "./mobile-device";
 import { validateOutputPath, validateFileExtension } from "./utils";
 import { formatElements } from "./format-elements";
+import { isOcrSupported, withOcrElements } from "./ocr";
 
 type ScreenshotContent = { type: "text", text: string } | { type: "image", data: string, mimeType: string };
 
@@ -712,12 +713,22 @@ export const createMcpServer = (): McpServer => {
 		{
 			device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
 			format: z.enum(["text", "json"]).optional().describe("Output format. \"text\" (default) is one compact line per element, \"json\" is a json array"),
+			ocr: z.boolean().optional().describe("Also read text off the screen with OCR and append it as OcrText elements (no ref, tap by coordinates). Slower. Use only when the text you want to tap is missing from a previous listing. macOS only. Defaults to false"),
 		},
 		{ readOnlyHint: true, openWorldHint: true },
-		async ({ device, format = "text" }) => {
+		async ({ device, format = "text", ocr = false }) => {
 			const robot = getRobotFromDevice(device);
-			const elements = await robot.getElementsOnScreen();
-			return formatElements(elements, format);
+			let elements = await robot.getElementsOnScreen();
+			if (ocr) {
+				elements = await withOcrElements(robot, elements);
+			}
+
+			const result = formatElements(elements, format);
+			if (elements.length === 0 && !ocr && isOcrSupported()) {
+				return `${result}\nNo elements found in the accessibility tree. Retry with ocr: true to read text off the screen.`;
+			}
+
+			return result;
 		}
 	);
 
