@@ -27,16 +27,31 @@ test("drops empty containers but keeps icon-only buttons", () => {
 	expect(kept.map(e => e.ref)).toEqual(["@e2", "@e3"]);
 });
 
-test("keeps a label repeated by child nodes only once, children keep their own text", () => {
+test("keeps a merged label repeated by child nodes only once, children keep their own text", () => {
 	const kept = compactElements([
 		el({ ref: "@e1", type: "Image", label: row, rect: { x: 26, y: 616, width: 289, height: 289 } }),
 		el({ ref: "@e2", text: "熊燒Bar", label: row, rect: { x: 341, y: 616, width: 619, height: 76 } }),
 		el({ ref: "@e3", label: row, rect: { x: 822, y: 694, width: 245, height: 42 } }),
 	], screen);
+	// @e3 only carried the repeated label, nothing is left to show
 	expect(kept.map(e => [e.ref, e.text, e.label])).toEqual([
 		["@e1", undefined, row],
 		["@e2", "熊燒Bar", undefined],
-		["@e3", undefined, undefined],
+	]);
+});
+
+test("keeps single-line labels that repeat, such as a per-row native button", () => {
+	const kept = compactElements([
+		el({ ref: "@e1", type: "android.widget.ImageButton", label: "More options", rect: { x: 950, y: 300, width: 100, height: 100 } }),
+		el({ ref: "@e2", type: "android.widget.ImageButton", label: "More options", rect: { x: 950, y: 600, width: 100, height: 100 } }),
+		el({ ref: "@e3", type: "android.view.View", label: "Delete", rect: { x: 100, y: 300, width: 100, height: 100 } }),
+		el({ ref: "@e4", type: "android.view.View", label: "Delete", rect: { x: 100, y: 600, width: 100, height: 100 } }),
+	], screen);
+	expect(kept.map(e => [e.ref, e.label])).toEqual([
+		["@e1", "More options"],
+		["@e2", "More options"],
+		["@e3", "Delete"],
+		["@e4", "Delete"],
 	]);
 });
 

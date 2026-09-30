@@ -13,17 +13,22 @@ const isOnScreen = (element: ScreenElement, screen: Dimensions): boolean => {
 const hasContent = (element: ScreenElement): boolean =>
 	!!(element.text || element.label || element.name || element.value || element.identifier) || INTERACTIVE_TYPE.test(element.type);
 
+// flutter merged semantics joins the texts of a subtree with newlines and repeats
+// that label on every node below; a native content-desc such as a per-row
+// "More options" is one line and names each button on its own
+const isMergedLabel = (label: string): boolean => label.includes("\n");
+
 /**
  * Drops what cannot be tapped or read: elements off screen (below the fold, or a
- * previous route shifted out by a transition) and empty layout containers. A label
- * repeated by child nodes, as flutter merged semantics does, is kept once.
+ * previous route shifted out by a transition) and empty layout containers. A
+ * merged label repeated by child nodes is kept once.
  */
 export const compactElements = (elements: ScreenElement[], screen: Dimensions): ScreenElement[] => {
 	const seen = new Set<string>();
 	return elements
-		.filter(e => (!isKnown(screen) || isOnScreen(e, screen)) && hasContent(e))
+		.filter(e => !isKnown(screen) || isOnScreen(e, screen))
 		.map(e => {
-			if (!e.label) {
+			if (!e.label || !isMergedLabel(e.label)) {
 				return e;
 			}
 
@@ -33,5 +38,6 @@ export const compactElements = (elements: ScreenElement[], screen: Dimensions): 
 
 			seen.add(e.label);
 			return e;
-		});
+		})
+		.filter(hasContent);
 };
