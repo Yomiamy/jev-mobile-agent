@@ -101,6 +101,7 @@ Limits:
 - Two identical targets on screen (e.g. the same app icon on the home screen and in the dock) split the probability and are refused; describe the target more precisely, e.g. by position.
 - Buttons without a label are picked by position only, with lower confidence (0.60–0.66 in the field test). A `tooltip` / `Semantics(label:)` in the app fixes that.
 - The confidence threshold (0.5) is hand-picked and should be tuned on recorded runs.
+- Only taps by ref are guarded against a changed screen (mobilecli rejects a stale ref). OCR elements and legacy robots are tapped by coordinates, which are not re-checked.
 
 Design, trade-offs and full test records: [spec](docs/features/2026-10-01-jev-tap.md) · [plan](docs/plans/2026-10-01-jev-tap.md).
 
