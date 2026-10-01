@@ -149,6 +149,14 @@ test.describe("tapByDescription", () => {
 		expect(taps).toEqual(["219,1088"]);
 	});
 
+	test("taps the visible part of a partly visible element", async () => {
+		answerWith("1", 0.95);
+		const partial: ScreenElement = { type: "Text", text: "返回", rect: { x: -243, y: 100, width: 289, height: 50 } };
+		const { robot, taps } = fakeRobot({ getElementsOnScreen: async () => [partial] });
+		await tapByDescription(robot, "返回");
+		expect(taps).toEqual(["23,125"]);
+	});
+
 	test("taps nothing when Jev is not confident", async () => {
 		answerWith("1", 0.2);
 		const { robot, taps } = fakeRobot();

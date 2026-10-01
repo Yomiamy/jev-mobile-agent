@@ -25,21 +25,28 @@ interface ChoiceAnswer {
 
 export const isJevEnabled = (): boolean => !!process.env.TYPESAFE_API_KEY;
 
-export const centerOf = (element: ScreenElement): { x: number; y: number } => ({
-	x: Math.round(element.rect.x + element.rect.width / 2),
-	y: Math.round(element.rect.y + element.rect.height / 2),
-});
+// the center of the part of the element inside the screen; compactElements keeps
+// partly visible elements, whose full-rect center can lie off screen
+export const centerOf = (element: ScreenElement, screen?: Dimensions): { x: number; y: number } => {
+	const { x, y, width, height } = element.rect;
+	const known = !!screen && screen.width > 0 && screen.height > 0;
+	const left = known ? Math.max(x, 0) : x;
+	const top = known ? Math.max(y, 0) : y;
+	const right = known ? Math.min(x + width, screen.width) : x + width;
+	const bottom = known ? Math.min(y + height, screen.height) : y + height;
+	return { x: Math.round((left + right) / 2), y: Math.round((top + bottom) / 2) };
+};
 
 export const shortType = (type: string): string => type.substring(type.lastIndexOf(".") + 1);
 
-const describe = (element: ScreenElement) => ({
+const describe = (element: ScreenElement, screen: Dimensions) => ({
 	type: shortType(element.type),
 	text: element.text || undefined,
 	label: element.label || undefined,
 	name: element.name || undefined,
 	value: element.value || undefined,
 	id: element.identifier || undefined,
-	center: centerOf(element),
+	center: centerOf(element, screen),
 	size: `${element.rect.width}x${element.rect.height}`,
 });
 
@@ -51,7 +58,7 @@ export const buildRequest = (target: string, elements: ScreenElement[], screen: 
 
 	const criteria: Record<string, object | string> = {};
 	elements.forEach((element, i) => {
-		criteria[String(i + 1)] = describe(element);
+		criteria[String(i + 1)] = describe(element, screen);
 	});
 	criteria[NONE] = "No listed element matches the target";
 
@@ -146,8 +153,8 @@ export const chooseElement = async (target: string, elements: ScreenElement[], s
 
 const MAX_TAP_ATTEMPTS = 2;
 
-const describeElement = (element: ScreenElement): string => {
-	const { x, y } = centerOf(element);
+const describeElement = (element: ScreenElement, screen: Dimensions): string => {
+	const { x, y } = centerOf(element, screen);
 	const name = element.text || element.label?.split("\n")[0] || element.name || element.identifier || "";
 	return `${element.ref ? `${element.ref} ` : ""}${shortType(element.type)} "${name}" at ${x},${y}`;
 };
@@ -171,7 +178,7 @@ export const tapByDescription = async (robot: Robot, target: string): Promise<st
 
 		const element = choice.element;
 		if (!element || !isConfident(choice)) {
-			const closest = choice.ranked.map(c => `${describeElement(c.element)} (${c.probability.toFixed(2)})`).join(", ") || "none";
+			const closest = choice.ranked.map(c => `${describeElement(c.element, screen)} (${c.probability.toFixed(2)})`).join(", ") || "none";
 			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}`);
 		}
 
@@ -179,7 +186,7 @@ export const tapByDescription = async (robot: Robot, target: string): Promise<st
 			if (element.ref && robot.tapByRef) {
 				await robot.tapByRef(element.ref);
 			} else {
-				const { x, y } = centerOf(element);
+				const { x, y } = centerOf(element, screen);
 				await robot.tap(x, y);
 			}
 		} catch (err: any) {
@@ -191,6 +198,6 @@ export const tapByDescription = async (robot: Robot, target: string): Promise<st
 			throw err;
 		}
 
-		return `Tapped ${describeElement(element)} (confidence ${choice.confidence.toFixed(2)}, from ${source}${attempt > 1 ? ", after the screen changed" : ""})`;
+		return `Tapped ${describeElement(element, screen)} (confidence ${choice.confidence.toFixed(2)}, from ${source}${attempt > 1 ? ", after the screen changed" : ""})`;
 	}
 };
