@@ -97,10 +97,10 @@ robot 回報的方向只當退路，因為它不可靠：在 Pixel 6 模擬器�
 
 有 ref 的元素用 ref 點擊；沒有 ref 的元素（OCR 元素）點擊它可見部分的中心，並保證落在畫面範圍內。Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
 
-**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊 `mobile_tap`，也不會送出任何資料到 TypeSafe。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
+**設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊 `mobile_tap`，也不會送出任何資料到 TypeSafe。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
 
 ```bash
-claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-mcp#feat/jev-decision
+claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-mcp#main
 ```
 
 共用的 `.mcp.json` 不要寫入 key，改為引用環境變數：`"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`。`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
@@ -159,7 +159,7 @@ claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:
 需要本 repo 的讀取權限。`prepare` 會在安裝時自動 build。
 
 ```bash
-claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements
+claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#main
 ```
 
 或在專案根目錄提交 `.mcp.json`，讓團隊開啟專案時自動提示啟用：
@@ -170,7 +170,7 @@ claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#feat/ocr-l
     "jev-mobile-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements"]
+      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#main"]
     }
   }
 }
