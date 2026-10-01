@@ -34,7 +34,14 @@ export const centerOf = (element: ScreenElement, screen?: Dimensions): { x: numb
 	const top = known ? Math.max(y, 0) : y;
 	const right = known ? Math.min(x + width, screen.width) : x + width;
 	const bottom = known ? Math.min(y + height, screen.height) : y + height;
-	return { x: Math.round((left + right) / 2), y: Math.round((top + bottom) / 2) };
+	const cx = Math.round((left + right) / 2);
+	const cy = Math.round((top + bottom) / 2);
+	if (!known) {
+		return { x: cx, y: cy };
+	}
+
+	// a one pixel sliver at the edge would round onto x == width, one past the last pixel
+	return { x: Math.min(cx, screen.width - 1), y: Math.min(cy, screen.height - 1) };
 };
 
 export const shortType = (type: string): string => type.substring(type.lastIndexOf(".") + 1);

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-import { buildRequest, chooseElement, isConfident, parseAnswer, tapByDescription } from "../src/jev";
+import { buildRequest, centerOf, chooseElement, isConfident, parseAnswer, tapByDescription } from "../src/jev";
 import { ActionableError, Robot, ScreenElement } from "../src/robot";
 
 const screen = { width: 1080, height: 2400 };
@@ -36,6 +36,11 @@ test("NONE and low confidence do not count as a match", () => {
 
 	const unsure = parseAnswer({ choice: "1", confidence: 0.2, probabilities: { "1": 0.4, "2": 0.35, "3": 0.2, "NONE": 0.05 } }, elements);
 	expect(isConfident(unsure)).toBe(false);
+});
+
+test("keeps the center of a one pixel sliver at the right and bottom edges on screen", () => {
+	const sliver: ScreenElement = { type: "Button", rect: { x: 1079, y: 2399, width: 100, height: 100 } };
+	expect(centerOf(sliver, screen)).toEqual({ x: 1079, y: 2399 });
 });
 
 test("rejects an answer that points at no observed element", () => {
