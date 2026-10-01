@@ -165,10 +165,9 @@ const describeElement = (element: ScreenElement, screen: Dimensions): string => 
  * unsure; reads the screen once more when the chosen ref went stale.
  */
 export const tapByDescription = async (robot: Robot, target: string): Promise<string> => {
-	const screen = await currentViewport(robot);
-
 	for (let attempt = 1; ; attempt++) {
 		const tree = await robot.getElementsOnScreen();
+		const screen = await currentViewport(robot, tree);
 		let source = "accessibility tree";
 		let choice = await chooseElement(target, compactElements(tree, screen), screen);
 		if (!isConfident(choice) && isOcrSupported()) {

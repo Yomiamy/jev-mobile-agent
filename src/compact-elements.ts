@@ -13,14 +13,31 @@ const isOnScreen = (element: ScreenElement, screen: Dimensions): boolean => {
 	return x < screen.width && y < screen.height && x + width > 0 && y + height > 0;
 };
 
+// the window root spans the whole display in its current orientation, e.g.
+// android:id/content or flutter's root box at 0,0
+const rootViewport = (elements: ScreenElement[], size: Dimensions): Dimensions | undefined => {
+	const short = Math.min(size.width, size.height);
+	const long = Math.max(size.width, size.height);
+	const root = elements.find(({ rect }) => rect.x === 0 && rect.y === 0 &&
+		((rect.width === short && rect.height === long) || (rect.width === long && rect.height === short)));
+	return root && { width: root.rect.width, height: root.rect.height };
+};
+
 /**
- * The screen size in the current orientation. Some robots (adb `wm size`) report
- * the fixed portrait size, others the rotated one, so orient the long edge to
- * match instead of trusting either. Falls back to the reported size when the
- * orientation cannot be read.
+ * The screen size in the current orientation. Robots report either the fixed
+ * portrait size (adb `wm size`) or the rotated one, and their orientation can
+ * come from the rotation lock setting rather than the display (mobilecli reports
+ * portrait for a landscape Chrome with auto-rotate on). So the window root in
+ * the dump decides; the reported orientation is only the fallback when the dump
+ * has no root, and the reported size when that cannot be read either.
  */
-export const currentViewport = async (robot: Robot): Promise<Dimensions> => {
+export const currentViewport = async (robot: Robot, elements: ScreenElement[]): Promise<Dimensions> => {
 	const size = await robot.getScreenSize();
+	const root = rootViewport(elements, size);
+	if (root) {
+		return root;
+	}
+
 	let landscape: boolean;
 	try {
 		// legacy WDA passes through raw values such as "uia_device_orientation_landscaperight"

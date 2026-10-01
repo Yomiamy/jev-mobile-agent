@@ -725,7 +725,7 @@ export const createMcpServer = (): McpServer => {
 				elements = await withOcrElements(robot, elements);
 			}
 
-			elements = compactElements(elements, await currentViewport(robot));
+			elements = compactElements(elements, await currentViewport(robot, elements));
 			const result = formatElements(elements, format);
 			if (elements.length === 0 && !ocr && isOcrSupported()) {
 				return `${result}\nNo elements found in the accessibility tree. Retry with ocr: true to read text off the screen.`;

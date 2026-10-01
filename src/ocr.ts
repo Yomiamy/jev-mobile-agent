@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 
+import { currentViewport } from "./compact-elements";
 import { ActionableError, Dimensions, Robot, ScreenElement, ScreenElementRect } from "./robot";
 
 // a text box as vision reports it: normalized to the image, origin at bottom-left
@@ -97,7 +98,8 @@ export const withOcrElements = async (robot: Robot, elements: ScreenElement[]): 
 		throw new ActionableError("OCR is only supported when the server runs on macOS");
 	}
 
-	const screen = await robot.getScreenSize();
+	// the screenshot is taken in the current orientation, map onto that, not the reported size
+	const screen = await currentViewport(robot, elements);
 	if (screen.width <= 0 || screen.height <= 0) {
 		throw new ActionableError("Screen size is unknown, cannot map OCR results onto screen coordinates");
 	}

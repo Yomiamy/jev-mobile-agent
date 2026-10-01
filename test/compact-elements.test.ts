@@ -41,10 +41,25 @@ test.describe("currentViewport", () => {
 		},
 	}) as unknown as Robot;
 
-	const dims = async (r: Robot) => {
-		const { width, height } = await currentViewport(r);
+	const dims = async (r: Robot, elements: ScreenElement[] = []) => {
+		const { width, height } = await currentViewport(r, elements);
 		return [width, height];
 	};
+
+	const root = (width: number, height: number) => el({ type: "android.widget.FrameLayout", identifier: "android:id/content", rect: { x: 0, y: 0, width, height } });
+
+	test("trusts the window root over a portrait orientation reported for a landscape screen", async () => {
+		// mobilecli with auto-rotate on: Chrome is landscape, the robot still says portrait 1080x2400
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "portrait"), [root(2400, 1080)])).toEqual([2400, 1080]);
+	});
+
+	test("trusts the window root over a landscape orientation reported for a portrait screen", async () => {
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "landscape"), [root(1080, 2400)])).toEqual([1080, 2400]);
+	});
+
+	test("ignores a box at 0,0 that is not the size of the screen", async () => {
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "portrait"), [root(1080, 128)])).toEqual([1080, 2400]);
+	});
 
 	test("swaps a portrait report in landscape and a landscape report in portrait", async () => {
 		expect(await dims(robotWith({ width: 1080, height: 2400 }, "landscape"))).toEqual([2400, 1080]);
