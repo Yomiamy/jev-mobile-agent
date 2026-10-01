@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
 import { currentViewport } from "./compact-elements";
+import { PNG } from "./png";
 import { ActionableError, Dimensions, Robot, ScreenElement, ScreenElementRect } from "./robot";
 
 // a text box as vision reports it: normalized to the image, origin at bottom-left
@@ -87,6 +88,31 @@ export const mergeOcrElements = (elements: ScreenElement[], ocrElements: ScreenE
 	[...elements, ...ocrElements.filter(o => !isCovered(o, elements))];
 
 export const isOcrSupported = (): boolean => process.platform === "darwin";
+
+// the screenshot is the screen as it is now; robots can report portrait for a landscape screen
+const screenshotViewport = (size: Dimensions, screenshot: Buffer): Dimensions => {
+	const { width, height } = new PNG(screenshot).getDimensions();
+	return (width > height) === (size.width > size.height) ? size : { ...size, width: size.height, height: size.width };
+};
+
+export interface OcrScreen {
+	elements: ScreenElement[];
+	screen: Dimensions;
+}
+
+/**
+ * Reads text off a screenshot without the accessibility tree. The orientation
+ * comes from the screenshot itself, the robot's orientation is not asked.
+ */
+export const readScreenText = async (robot: Robot, recognize = recognizeText): Promise<OcrScreen> => {
+	const screenshot = await robot.getScreenshot({ format: "png" });
+	const screen = screenshotViewport(await robot.getScreenSize(), screenshot);
+	if (screen.width <= 0 || screen.height <= 0) {
+		throw new ActionableError("Screen size is unknown, cannot map OCR results onto screen coordinates");
+	}
+
+	return { elements: toScreenElements(recognize(screenshot), screen), screen };
+};
 
 /**
  * Appends text read off a screenshot to the accessibility tree elements, for

@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import fs from "node:fs";
-import path from "node:path";
-
-import { buildRequest, centerOf, chooseElement, isConfident, parseAnswer, tapByDescription } from "../src/jev";
+import { buildRequest, centerOf, chooseElement, isConfident, OcrReader, parseAnswer, tapByDescription } from "../src/jev";
+import { OcrObservation, readScreenText } from "../src/ocr";
 import { ActionableError, Robot, ScreenElement } from "../src/robot";
 
 const screen = { width: 1080, height: 2400 };
@@ -106,28 +104,67 @@ test.describe("chooseElement request failures tap nothing", () => {
 
 test.describe("tapByDescription", () => {
 	const realFetch = globalThis.fetch;
-	const screenshot = fs.readFileSync(path.join(__dirname, "fixtures", "baseline.jpg"));
 
 	test.afterEach(() => {
 		globalThis.fetch = realFetch;
 	});
 
-	const answerWith = (choice: string, confidence: number) => {
-		globalThis.fetch = async () => new Response(JSON.stringify({
-			answers: { element: { choice, confidence, probabilities: { [choice]: confidence } } },
-		}));
+	// only the signature and IHDR size are read
+	const pngOf = (width: number, height: number): Buffer => {
+		const png = Buffer.alloc(24);
+		Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
+		png.writeUInt32BE(width, 16);
+		png.writeUInt32BE(height, 20);
+		return png;
 	};
+
+	// answers in turn, cycling; returns the request bodies sent
+	const answerInTurn = (...answers: Array<[string, number]>) => {
+		const requests: any[] = [];
+		globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+			const [choice, confidence] = answers[requests.length % answers.length];
+			requests.push(JSON.parse(String(init?.body)));
+			return new Response(JSON.stringify({
+				answers: { element: { choice, confidence, probabilities: { [choice]: confidence } } },
+			}));
+		}) as typeof fetch;
+		return requests;
+	};
+
+	const answerWith = (choice: string, confidence: number) => answerInTurn([choice, confidence]);
+
+	// the real readScreenText (screenshot, orientation, mapping) with vision faked
+	const ocrReading = (recognize: () => OcrObservation[]) => {
+		let reads = 0;
+		const read: OcrReader = robot => {
+			reads++;
+			return readScreenText(robot, recognize);
+		};
+		return { read, reads: () => reads };
+	};
+
+	// "我的位置" at 108,1140 216x60 on a 1080x2400 portrait screenshot, center 216,1170
+	const myLocation: OcrObservation = { text: "我的位置", x: 0.1, y: 0.5, width: 0.2, height: 0.025 };
 
 	const fakeRobot = (overrides: Partial<Robot> = {}) => {
 		const taps: string[] = [];
 		let dumps = 0;
+		let screenshots = 0;
+		let orientations = 0;
 		const robot = {
 			getScreenSize: async () => ({ ...screen, scale: 1 }),
+			getOrientation: async () => {
+				orientations++;
+				return "portrait";
+			},
 			getElementsOnScreen: async () => {
 				dumps++;
 				return elements;
 			},
-			getScreenshot: async () => screenshot,
+			getScreenshot: async () => {
+				screenshots++;
+				return pngOf(1080, 2400);
+			},
 			tapByRef: async (ref: string) => {
 				taps.push(ref);
 			},
@@ -136,13 +173,13 @@ test.describe("tapByDescription", () => {
 			},
 			...overrides,
 		} as unknown as Robot;
-		return { robot, taps, dumps: () => dumps };
+		return { robot, taps, dumps: () => dumps, screenshots: () => screenshots, orientations: () => orientations };
 	};
 
 	test("taps the chosen element by ref", async () => {
 		answerWith("2", 0.95);
 		const { robot, taps } = fakeRobot();
-		const result = await tapByDescription(robot, "登出");
+		const result = await tapByDescription(robot, "登出", null);
 		expect(taps).toEqual(["@e2"]);
 		expect(result).toContain("Tapped @e2 Button \"登出\"");
 	});
@@ -150,7 +187,7 @@ test.describe("tapByDescription", () => {
 	test("taps the center of an element without a ref", async () => {
 		answerWith("3", 0.95);
 		const { robot, taps } = fakeRobot();
-		await tapByDescription(robot, "我的位置");
+		await tapByDescription(robot, "我的位置", null);
 		expect(taps).toEqual(["219,1088"]);
 	});
 
@@ -158,16 +195,17 @@ test.describe("tapByDescription", () => {
 		answerWith("1", 0.95);
 		const partial: ScreenElement = { type: "Text", text: "返回", rect: { x: -243, y: 100, width: 289, height: 50 } };
 		const { robot, taps } = fakeRobot({ getElementsOnScreen: async () => [partial] });
-		await tapByDescription(robot, "返回");
+		await tapByDescription(robot, "返回", null);
 		expect(taps).toEqual(["23,125"]);
 	});
 
 	test("taps nothing when Jev is not confident", async () => {
 		answerWith("1", 0.2);
 		const { robot, taps } = fakeRobot();
-		const error = await tapByDescription(robot, "設定").catch(err => err);
+		const error = await tapByDescription(robot, "設定", null).catch(err => err);
 		expect(error).toBeInstanceOf(ActionableError);
 		expect(error.message).toContain("Nothing tapped");
+		expect(error.message).toContain("searched accessibility tree");
 		expect(taps).toEqual([]);
 	});
 
@@ -179,12 +217,60 @@ test.describe("tapByDescription", () => {
 		];
 		answerWith("2", 0.95);
 		const { robot, taps } = fakeRobot({ getElementsOnScreen: async () => landscape });
-		await tapByDescription(robot, "右側按鈕");
+		await tapByDescription(robot, "右側按鈕", null);
 		expect(taps).toEqual(["1600,340"]);
 	});
 
-	test("reads the screen again when the chosen ref went stale", async () => {
+	test("OCR confident: taps by coordinates without a dump", async () => { // acceptance 1
+		answerWith("1", 0.95);
+		const { robot, taps, dumps } = fakeRobot();
+		const result = await tapByDescription(robot, "我的位置", ocrReading(() => [myLocation]).read);
+		expect(taps).toEqual(["216,1170"]);
+		expect(dumps()).toBe(0);
+		expect(result).toContain("from OCR)");
+	});
+
+	test("OCR unsure: dumps once, merges the OCR already read, no second OCR", async () => { // acceptance 2
+		const requests = answerInTurn(["1", 0.2], ["2", 0.95]);
+		const { robot, taps, dumps, screenshots } = fakeRobot();
+		const ocr = ocrReading(() => [{ ...myLocation, text: "關鍵字過濾" }]);
+		const result = await tapByDescription(robot, "登出", ocr.read);
+		expect(taps).toEqual(["@e2"]);
+		expect([ocr.reads(), screenshots(), dumps()]).toEqual([1, 1, 1]);
+		expect(Object.values(requests[1].questions.element.criteria).some((c: any) => c.text === "關鍵字過濾")).toBe(true);
+		expect(result).toContain("from OCR + accessibility tree");
+	});
+
+	test("OCR alone takes the orientation from the screenshot, not the robot", async () => { // acceptance 4
+		answerWith("1", 0.95);
+		const { robot, taps, dumps, orientations } = fakeRobot({ getScreenshot: async () => pngOf(2400, 1080) });
+		// 1500,432 300x108 on 2400x1080; on the unswapped 1080x2400 it would be 675,960
+		const button: OcrObservation = { text: "右側按鈕", x: 0.625, y: 0.5, width: 0.125, height: 0.1 };
+		await tapByDescription(robot, "右側按鈕", ocrReading(() => [button]).read);
+		expect(taps).toEqual(["1650,486"]);
+		expect([dumps(), orientations()]).toEqual([0, 0]);
+	});
+
+	test("unsure on both: taps nothing and names both sources", async () => { // acceptance 5
+		answerWith("1", 0.2);
+		const { robot, taps } = fakeRobot();
+		const error = await tapByDescription(robot, "設定", ocrReading(() => [myLocation]).read).catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		expect(error.message).toContain("searched OCR + accessibility tree");
+		expect(taps).toEqual([]);
+	});
+
+	test("without OCR support: dump then Jev, no screenshot", async () => { // acceptance 6
 		answerWith("2", 0.95);
+		const { robot, taps, screenshots } = fakeRobot();
+		const result = await tapByDescription(robot, "登出", null);
+		expect(taps).toEqual(["@e2"]);
+		expect(screenshots()).toBe(0);
+		expect(result).toContain("from accessibility tree)");
+	});
+
+	test("a stale ref from the tree fallback reads the screen again from OCR", async () => { // acceptance 7
+		answerInTurn(["1", 0.2], ["2", 0.95]);
 		let first = true;
 		const taps: string[] = [];
 		const { robot, dumps } = fakeRobot({
@@ -197,9 +283,21 @@ test.describe("tapByDescription", () => {
 				taps.push(ref);
 			},
 		});
-		const result = await tapByDescription(robot, "登出");
-		expect(dumps()).toBe(2);
+		const ocr = ocrReading(() => [myLocation]);
+		const result = await tapByDescription(robot, "登出", ocr.read);
+		expect([ocr.reads(), dumps()]).toEqual([2, 2]);
 		expect(taps).toEqual(["@e2"]);
 		expect(result).toContain("after the screen changed");
+	});
+
+	test("an OCR failure falls back to the tree instead of blocking the tap", async () => { // acceptance 8
+		answerWith("2", 0.95);
+		const { robot, taps } = fakeRobot();
+		const ocr = ocrReading(() => {
+			throw new Error("Vision text recognition failed");
+		});
+		const result = await tapByDescription(robot, "登出", ocr.read);
+		expect(taps).toEqual(["@e2"]);
+		expect(result).toContain("OCR failed: Vision text recognition failed");
 	});
 });
