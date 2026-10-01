@@ -97,10 +97,10 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 
 An element with a ref is tapped by ref; one without (an OCR element) is tapped at the center of its visible part, kept inside the viewport. Jev can only pick an observed element, so the model never makes up coordinates. The agent sends one short phrase instead of reading 3,000–7,000 characters of element list per step.
 
-**Setup**: without `TYPESAFE_API_KEY`, `mobile_tap` is not registered and nothing is sent to TypeSafe. `mobile_tap` lives on the `feat/jev-decision` branch. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
+**Setup**: without `TYPESAFE_API_KEY`, `mobile_tap` is not registered and nothing is sent to TypeSafe. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
 
 ```bash
-claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-mcp#feat/jev-decision
+claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-mcp#main
 ```
 
 For a shared `.mcp.json`, reference the variable instead of committing the key: `"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`. `TYPESAFE_MODEL` overrides the model (default `jev-latest`).
@@ -159,7 +159,7 @@ A profile or release build makes mobilecli fall back to the accessibility dump, 
 Requires read access to this repo. `prepare` builds on install.
 
 ```bash
-claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements
+claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#main
 ```
 
 Or commit a `.mcp.json` at your project root so teammates are prompted to enable it when they open the project:
@@ -170,7 +170,7 @@ Or commit a `.mcp.json` at your project root so teammates are prompted to enable
     "jev-mobile-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements"]
+      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#main"]
     }
   }
 }
