@@ -18,6 +18,8 @@ import { MobileDevice } from "./mobile-device";
 import { validateOutputPath, validateFileExtension } from "./utils";
 import { formatElements } from "./format-elements";
 import { isOcrSupported, withOcrElements } from "./ocr";
+import { compactElements, currentViewport } from "./compact-elements";
+import { isJevEnabled, tapByDescription } from "./jev";
 
 type ScreenshotContent = { type: "text", text: string } | { type: "image", data: string, mimeType: string };
 
@@ -723,6 +725,7 @@ export const createMcpServer = (): McpServer => {
 				elements = await withOcrElements(robot, elements);
 			}
 
+			elements = compactElements(elements, await currentViewport(robot, elements));
 			const result = formatElements(elements, format);
 			if (elements.length === 0 && !ocr && isOcrSupported()) {
 				return `${result}\nNo elements found in the accessibility tree. Retry with ocr: true to read text off the screen.`;
@@ -731,6 +734,20 @@ export const createMcpServer = (): McpServer => {
 			return result;
 		}
 	);
+
+	if (isJevEnabled()) {
+		tool(
+			"mobile_tap",
+			"Tap By Description",
+			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (accessibility tree, then OCR if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped and the closest candidates are returned; fall back to mobile_list_elements_on_screen then. Icons missing from the accessibility tree cannot be found this way.",
+			{
+				device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
+				target: z.string().min(1).describe("Short description of the element to tap: its text, label, role, or position"),
+			},
+			{ readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+			async ({ device, target }) => tapByDescription(getRobotFromDevice(device), target)
+		);
+	}
 
 	tool(
 		"mobile_press_button",

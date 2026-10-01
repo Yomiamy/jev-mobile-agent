@@ -133,6 +133,6 @@ mobile_list_elements_on_screen({ device, ocr: true })
 | 只讀文字 | 純圖示按鈕（愛心、漢堡選單）仍需截圖；根本解法是 app 端補 `tooltip`／`Semantics(label:)` |
 | 雜訊 | 圖示、星等、低對比文字會被誤讀；OCR 讀錯字時無法和樹中的同一段文字去重 |
 | 速度 | 每次 `ocr: true` 多 1–1.5 秒（含截圖） |
-| 橫向畫面座標 | `withOcrElements` 以 `getScreenSize()` 換算座標；後續在 `feat/jev-decision` 實測發現 mobilecli 開自動旋轉時回報錯誤方向，橫向時 OCR 座標會被壓進直向尺寸。已在該分支 `a209596` 改為以 dump 的視窗根元素決定畫面範圍 |
+| 橫向畫面座標 | `withOcrElements` 以 `getScreenSize()` 換算座標；後續在 `feat/jev-decision` 實測發現 mobilecli 開自動旋轉時回報錯誤方向，橫向時 OCR 座標會被壓進直向尺寸。已在該分支 `e7d1c32` 改為以 dump 的視窗根元素決定畫面範圍 |
 | 由模型判斷何時用 OCR | 模型可能不重試而直接截圖；只有樹完全為空時才有明確提示 |
 | 後續 | 在 `feat/jev-decision` 以 Jev 依描述點擊（`mobile_tap`）時，server 端在樹中找不到目標才自動加上 OCR，見 `docs/features/2026-10-01-jev-tap.md` |

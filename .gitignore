@@ -5,3 +5,4 @@ lib
 coverage
 test-results
 playwright-report
+.claude/workflow-state

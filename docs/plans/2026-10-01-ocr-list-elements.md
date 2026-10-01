@@ -134,7 +134,7 @@ rect: {
 
 ### Task 7: 橫向畫面的座標換算
 
-- [ ] `withOcrElements` 的螢幕尺寸改由 dump 的視窗根元素決定（已在 `feat/jev-decision` 的 `a209596` 實作，隨該分支併入）。
+- [ ] `withOcrElements` 的螢幕尺寸改由 dump 的視窗根元素決定（已在 `feat/jev-decision` 的 `e7d1c32` 實作，隨該分支併入）。
 - [ ] 實機：開自動旋轉的橫向畫面，比對 OCR 座標與樹中同一元素的中心點。
 
 ### Task 8: iOS 模擬器驗證
