@@ -35,7 +35,7 @@ take_screenshot                    ← 模型目測（最後手段）
 | `src/server.ts` | `mobile_list_elements_on_screen` 新增 `ocr` 參數；樹為空時提示改用 `ocr: true` |
 | `src/format-elements.ts` | 沒有 ref 的元素（OCR 結果、legacy 模式）輸出中心點 `tap=x,y` |
 | `skills/mobile-automation/SKILL.md` | 告訴 agent 何時該用 OCR |
-| `src/compact-elements.ts` | 精簡元素清單，有沒有 TypeSafe key 都會生效：只留畫面內、去掉空容器、重複的多行（合併）label 只留一次，長度約減少 60% |
+| `src/compact-elements.ts` | 精簡元素清單，有沒有 TypeSafe key 都會生效：只留目前畫面範圍內的元素（見[畫面範圍與旋轉](#畫面範圍與旋轉)）、去掉空容器、重複的多行（合併）label 只留一次，長度約減少 60% |
 | `src/jev.ts` | `mobile_tap` 背後的 Jev 元素選擇（選用，見下方） |
 
 ### `ocr` 參數
@@ -56,7 +56,7 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 ```
 
 - **`tap=x,y` 是已算好的中心點**，直接傳給 `mobile_click_on_screen_at_coordinates`。`at=` 是左上角，不必讓模型自己算中心。
-- **座標已是螢幕座標**：Vision 回傳相對於截圖的正規化座標，截圖涵蓋整個螢幕，乘上螢幕尺寸即可，不受截圖縮放與 iOS point / pixel 差異影響。
+- **座標已是螢幕座標**：Vision 回傳相對於截圖的正規化座標，截圖涵蓋整個螢幕，乘上目前的畫面範圍即可，不受截圖縮放與 iOS point / pixel 差異影響，螢幕旋轉後也能正確換算（見[畫面範圍與旋轉](#畫面範圍與旋轉)）。
 - **去重**：OCR 框中心落在某個無障礙元素內、且文字相同（只比對字母與數字，忽略 `·`/`•`、空白等差異）時丟棄，只留下樹裡沒有的東西。
 - **OCR 元素沒有 ref**，只能用座標點擊。
 
@@ -66,6 +66,18 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 - 上一次 list 找不到要點的文字 → 帶 `ocr: true` 重新 list。
 - 無障礙樹完全為空時，回傳內容會附上 `Retry with ocr: true` 提示。
+
+設計、方案取捨與完整測試紀錄：[規格](docs/features/2026-10-01-ocr-list-elements.md) · [計畫](docs/plans/2026-10-01-ocr-list-elements.md)。
+
+### 畫面範圍與旋轉
+
+元素清單只保留目前畫面範圍內的元素，OCR 也換算到同一個範圍。畫面範圍依以下順序決定：
+
+1. **dump 中的視窗根元素**：位於 `0,0`、寬高等於螢幕尺寸或其對調的元素，例如 `android:id/content`、Flutter 的根元素。
+2. robot 回報的螢幕方向，用來把回報的尺寸轉到正確方向。
+3. 直接使用 robot 回報的尺寸。
+
+robot 回報的方向只當退路，因為它不可靠：在 Pixel 6 模擬器上開啟自動旋轉、把 Chrome 轉成橫向（`ROTATION_270`，2400x1080）時，mobilecli 仍回報 `portrait`、1080x2400。只信任這個回報時，x ≥ 1080 的 36 個元素全被刪掉；改用視窗根元素判斷後全部保留。
 
 ## 用 Jev 依描述點擊（選用）
 
@@ -81,9 +93,9 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 2. 問 Jev 哪個元素符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。
 3. 找不到或信心不足 → 加上 OCR 元素再問一次。
 4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，讓 agent 改用 `mobile_list_elements_on_screen`。
-5. 讀取與點擊之間畫面變了（ref 失效）→ 重新讀取並重試一次。
+5. 讀取與點擊之間畫面變了（ref 失效）→ 重新讀取畫面與畫面範圍，再重試一次。
 
-Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
+有 ref 的元素用 ref 點擊；沒有 ref 的元素（OCR 元素）點擊它可見部分的中心，並保證落在畫面範圍內。Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。
 
 **設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊 `mobile_tap`，也不會送出任何資料到 TypeSafe。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
 
@@ -118,6 +130,7 @@ claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomi
 
 - 側選單項目在無障礙樹中**完全不存在**，每次都靠 OCR 找到，Jev 選中它們的信心為 0.92–0.95。
 - OCR 與無障礙樹對同一元素的中心點誤差約 8px。
+- 旋轉：開啟自動旋轉、Chrome 轉成橫向時，畫面範圍為 2400x1080，x ≥ 1080 的元素全部保留在清單中；直向的 FindRestaurant 仍為 1080x2400。
 - 用 Jev 並沒有比較快，因為每次 `mobile_tap` 都要重新讀取畫面，而這個 app 讀取畫面很慢（見下方）。Jev 本身每次請求約 0.3 秒。token 有一部分是轉移而不是省下：改由 Jev 讀元素表，而 Jev 端的用量目前還沒記錄。
 
 ### Flutter debug build 為什麼讀取畫面很慢
@@ -137,7 +150,7 @@ claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomi
 - **只讀文字，不認圖示**：只有圖示的按鈕（愛心、漢堡選單）仍需截圖或靠座標。根本解法是在 app 端補 `tooltip` / `Semantics(label:)`。
 - **會有雜訊**：圖示、星等、低對比文字可能被誤讀（例如 `$$` 讀成 `$s`）。不以 confidence 過濾，因為 Vision 的 confidence 分辨不出雜訊與有效目標，交給模型依語意挑選。
 - **較慢**：每次 `ocr: true` 約多 1–1.5 秒（含截圖）。
-- 橫向畫面與 iOS 模擬器尚未實測。
+- **螢幕旋轉**：橫向只在 Android 模擬器上實測過，iOS 模擬器尚未實測。dump 中找不到全螢幕的視窗根元素時（非 edge-to-edge 的 App、分割畫面、legacy WDA 已濾掉根類型），會退回 robot 回報的方向，而 mobilecli 與 legacy Android robot（`user_rotation`）回報的方向都可能錯誤。
 
 ## 安裝
 
