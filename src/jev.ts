@@ -1,4 +1,4 @@
-import { compactElements } from "./compact-elements";
+import { compactElements, currentViewport } from "./compact-elements";
 import { isOcrSupported, withOcrElements } from "./ocr";
 import { ActionableError, Dimensions, Robot, ScreenElement } from "./robot";
 
@@ -155,7 +155,7 @@ const describeElement = (element: ScreenElement): string => {
  * unsure; reads the screen once more when the chosen ref went stale.
  */
 export const tapByDescription = async (robot: Robot, target: string): Promise<string> => {
-	const screen = await robot.getScreenSize();
+	const screen = await currentViewport(robot);
 
 	for (let attempt = 1; ; attempt++) {
 		const tree = await robot.getElementsOnScreen();

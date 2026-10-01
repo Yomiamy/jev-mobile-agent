@@ -1,17 +1,35 @@
-import { Dimensions, ScreenElement } from "./robot";
+import { Dimensions, Robot, ScreenElement } from "./robot";
 
 // a control that can be tapped even when it carries no text, e.g. an icon-only button
 const INTERACTIVE_TYPE = /Button|EditText|TextField|SearchField|Switch|CheckBox|Radio|Slider/i;
 
 const isKnown = (screen: Dimensions): boolean => screen.width > 0 && screen.height > 0;
 
-// some robots report the portrait size while elements come in the current
-// orientation, so bound both axes by the long edge; below the fold and a route
-// shifted off to the left are still dropped
+// elements come in the current orientation; bound x by the width and y by the
+// height of that orientation. below the fold and a route shifted off to the left
+// are dropped, a partly visible element stays
 const isOnScreen = (element: ScreenElement, screen: Dimensions): boolean => {
 	const { x, y, width, height } = element.rect;
-	const edge = Math.max(screen.width, screen.height);
-	return x < edge && y < edge && x + width > 0 && y + height > 0;
+	return x < screen.width && y < screen.height && x + width > 0 && y + height > 0;
+};
+
+/**
+ * The screen size in the current orientation. Some robots (adb `wm size`) report
+ * the fixed portrait size, others the rotated one, so orient the long edge to
+ * match instead of trusting either. Falls back to the reported size when the
+ * orientation cannot be read.
+ */
+export const currentViewport = async (robot: Robot): Promise<Dimensions> => {
+	const size = await robot.getScreenSize();
+	let landscape: boolean;
+	try {
+		landscape = (await robot.getOrientation()) === "landscape";
+	} catch {
+		return size;
+	}
+
+	const wide = size.width > size.height;
+	return wide === landscape ? size : { ...size, width: size.height, height: size.width };
 };
 
 const hasContent = (element: ScreenElement): boolean =>

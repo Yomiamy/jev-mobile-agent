@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { compactElements } from "../src/compact-elements";
-import { ScreenElement } from "../src/robot";
+import { compactElements, currentViewport } from "../src/compact-elements";
+import { Robot, ScreenElement } from "../src/robot";
 
 const screen = { width: 1080, height: 2400 };
 const row = "熊燒Bar\n193 m\n3則評論";
@@ -18,11 +18,47 @@ test("drops elements outside the screen, including a previous route shifted off 
 	expect(kept.map(e => e.ref)).toEqual(["@e1", "@e4"]);
 });
 
-test("keeps the right half of a landscape screen when the robot reports the portrait size", () => {
-	const kept = compactElements([
-		el({ ref: "@e1", text: "right side in landscape", rect: { x: 1500, y: 300, width: 200, height: 80 } }),
-	], screen);
-	expect(kept.map(e => e.ref)).toEqual(["@e1"]);
+test("keeps the right half of a landscape screen, drops it in portrait", () => {
+	const right = el({ ref: "@e1", text: "right side in landscape", rect: { x: 1500, y: 300, width: 200, height: 80 } });
+	expect(compactElements([right], { width: 2400, height: 1080 })).toEqual([right]);
+	expect(compactElements([right], screen)).toEqual([]);
+});
+
+test("drops elements below the short edge in landscape", () => {
+	const low = el({ ref: "@e1", text: "off screen", rect: { x: 100, y: 1500, width: 200, height: 80 } });
+	expect(compactElements([low], { width: 2400, height: 1080 })).toEqual([]);
+});
+
+test.describe("currentViewport", () => {
+	const robotWith = (size: { width: number; height: number }, orientation?: string) => ({
+		getScreenSize: async () => ({ ...size, scale: 1 }),
+		getOrientation: async () => {
+			if (!orientation) {
+				throw new Error("unsupported");
+			}
+
+			return orientation;
+		},
+	}) as unknown as Robot;
+
+	const dims = async (r: Robot) => {
+		const { width, height } = await currentViewport(r);
+		return [width, height];
+	};
+
+	test("swaps a portrait report in landscape and a landscape report in portrait", async () => {
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "landscape"))).toEqual([2400, 1080]);
+		expect(await dims(robotWith({ width: 2400, height: 1080 }, "portrait"))).toEqual([1080, 2400]);
+	});
+
+	test("keeps a size that already matches the orientation", async () => {
+		expect(await dims(robotWith({ width: 2400, height: 1080 }, "landscape"))).toEqual([2400, 1080]);
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "portrait"))).toEqual([1080, 2400]);
+	});
+
+	test("uses the reported size when the orientation is unavailable", async () => {
+		expect(await dims(robotWith({ width: 1080, height: 2400 }))).toEqual([1080, 2400]);
+	});
 });
 
 test("drops empty containers but keeps icon-only buttons", () => {
