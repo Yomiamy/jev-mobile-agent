@@ -166,6 +166,18 @@ test.describe("tapByDescription", () => {
 		expect(taps).toEqual([]);
 	});
 
+	test("taps the right half of a landscape screen the robot reports as portrait", async () => {
+		// mobilecli with auto-rotate on: portrait 1080x2400 reported, the window root says 2400x1080
+		const landscape: ScreenElement[] = [
+			{ type: "android.widget.FrameLayout", identifier: "android:id/content", rect: { x: 0, y: 0, width: 2400, height: 1080 } },
+			{ type: "OcrText", text: "右側按鈕", rect: { x: 1500, y: 300, width: 200, height: 80 } },
+		];
+		answerWith("2", 0.95);
+		const { robot, taps } = fakeRobot({ getElementsOnScreen: async () => landscape });
+		await tapByDescription(robot, "右側按鈕");
+		expect(taps).toEqual(["1600,340"]);
+	});
+
 	test("reads the screen again when the chosen ref went stale", async () => {
 		answerWith("2", 0.95);
 		let first = true;
