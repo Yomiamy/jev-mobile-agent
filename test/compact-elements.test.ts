@@ -56,6 +56,10 @@ test.describe("currentViewport", () => {
 		expect(await dims(robotWith({ width: 1080, height: 2400 }, "portrait"))).toEqual([1080, 2400]);
 	});
 
+	test("treats a raw WDA landscape value as landscape", async () => {
+		expect(await dims(robotWith({ width: 1080, height: 2400 }, "uia_device_orientation_landscaperight"))).toEqual([2400, 1080]);
+	});
+
 	test("uses the reported size when the orientation is unavailable", async () => {
 		expect(await dims(robotWith({ width: 1080, height: 2400 }))).toEqual([1080, 2400]);
 	});

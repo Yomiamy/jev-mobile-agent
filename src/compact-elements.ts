@@ -23,7 +23,8 @@ export const currentViewport = async (robot: Robot): Promise<Dimensions> => {
 	const size = await robot.getScreenSize();
 	let landscape: boolean;
 	try {
-		landscape = (await robot.getOrientation()) === "landscape";
+		// legacy WDA passes through raw values such as "uia_device_orientation_landscaperight"
+		landscape = /landscape/i.test(String(await robot.getOrientation()));
 	} catch {
 		return size;
 	}
