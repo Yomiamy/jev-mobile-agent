@@ -62,7 +62,7 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 ### When it is used
 
-The agent decides from the tool description; the server never turns OCR on by itself (`list` is the most frequent call, and running OCR every time would slow everything down):
+The agent decides from the tool description; the server never turns OCR on by itself for `list` (it is the most frequent call, and running OCR every time would slow everything down). `mobile_tap` is different: it reads OCR first on every tap (see below). For `list`:
 
 - The text to tap is missing from the previous listing → list again with `ocr: true`.
 - When the accessibility tree is completely empty, the result includes a `Retry with ocr: true` hint.
@@ -86,12 +86,14 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 ```jsonc
 // mobile_tap
 { "device": "Pixel_6", "target": "menu button at the top left" }
-// → Tapped @e65 Button "" at 74,202 (confidence 0.88, from accessibility tree)
+// → Tapped @e65 Button "" at 74,202 (confidence 0.62, from OCR + accessibility tree)
+{ "device": "Pixel_6", "target": "關鍵字過濾" }
+// → Tapped OcrText "關鍵字過濾" at 257,663 (confidence 0.81, from OCR)
 ```
 
-1. Read the accessibility tree and compact it: drop off-screen elements and empty containers, keep a multi-line (merged) label repeated by child nodes only once.
-2. Ask Jev which element matches `target` (one Choice question: one option per element, plus NONE).
-3. No match or low confidence → add OCR elements and ask once more.
+1. Take a screenshot, read its text with OCR and ask Jev which text matches `target` (one Choice question: one option per element, plus NONE). The orientation comes from the screenshot itself. OCR is cheap (about 1–1.5 s), while reading the accessibility tree takes 6–10 s on a Flutter debug build (see below).
+2. No match or low confidence → read the accessibility tree and compact it (drop off-screen elements and empty containers, keep a multi-line (merged) label repeated by child nodes only once), merge in the OCR elements from step 1 and ask once more. OCR does not run a second time.
+3. When the server does not run on macOS (no OCR), or the screenshot or OCR fails, go straight to step 2 with the accessibility tree only.
 4. Still no confident match → **nothing is tapped**; the closest candidates are returned so the agent can fall back to `mobile_list_elements_on_screen`.
 5. If the screen changed between reading and tapping (stale ref), read it again, including the viewport, and retry once.
 
@@ -105,11 +107,13 @@ claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yo
 
 For a shared `.mcp.json`, reference the variable instead of committing the key: `"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`. `TYPESAFE_MODEL` overrides the model (default `jev-latest`).
 
-> **Privacy**: `mobile_tap` sends the text of the on-screen elements (and OCR text when used) to TypeSafe. Screens can contain personal data such as account emails; enable it only where that is acceptable.
+> **Privacy**: every `mobile_tap` sends the on-screen text read by OCR to TypeSafe, and the text of the accessibility tree elements too when the tree is read. Screens can contain personal data such as account emails; enable it only where that is acceptable.
 
 Limits:
 
 - Icons missing from the accessibility tree cannot be found (OCR reads text only).
+- Icon targets and native screens (the launcher's tree reads in 0.7 s) pay about 1–1.5 s more per tap: OCR runs first, is unsure, and then the tree is read.
+- A text target that OCR alone matches confidently is tapped by coordinates, even when the tree has a ref for it (e.g. a dialog's "取消"), so it loses the stale-ref protection below.
 - Two identical targets on screen (e.g. the same app icon on the home screen and in the dock) split the probability and are refused; describe the target more precisely, e.g. by position.
 - Buttons without a label are picked by position only, with lower confidence (0.60–0.66 in the field test). A `tooltip` / `Semantics(label:)` in the app fixes that.
 - The confidence threshold (0.5) is hand-picked and should be tuned on recorded runs.
