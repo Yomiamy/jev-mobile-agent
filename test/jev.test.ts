@@ -51,6 +51,11 @@ test("rejects malformed answers instead of crashing", () => {
 	expect(() => parseAnswer({ choice: "1", confidence: NaN, probabilities: { "1": 1 } }, elements)).toThrow("invalid answer");
 	expect(() => parseAnswer({ choice: "1", confidence: 1, probabilities: null as any }, elements)).toThrow("invalid answer");
 
+	expect(() => parseAnswer({ choice: 2 as any, confidence: 1, probabilities: { "2": 1 } }, elements)).toThrow("invalid answer");
+	for (const confidence of [-0.1, 1.5, 2]) {
+		expect(() => parseAnswer({ choice: "1", confidence, probabilities: { "1": 1 } }, elements)).toThrow("invalid answer");
+	}
+
 	const choice = parseAnswer({ choice: "2", confidence: 0.9, probabilities: { "1": "x" as any, "2": 0.9 } }, elements);
 	expect(choice.ranked.map(c => c.element)).toEqual([elements[1]]);
 });

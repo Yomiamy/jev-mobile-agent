@@ -77,8 +77,11 @@ const elementForOption = (option: string, elements: ScreenElement[]): ScreenElem
 
 export const parseAnswer = (answer: ChoiceAnswer | undefined, elements: ScreenElement[]): ElementChoice => {
 	const valid = answer
+		&& typeof answer.choice === "string"
 		&& (answer.choice === NONE || elementForOption(answer.choice, elements) !== undefined)
 		&& Number.isFinite(answer.confidence)
+		&& answer.confidence >= 0
+		&& answer.confidence <= 1
 		&& answer.probabilities !== null
 		&& typeof answer.probabilities === "object";
 	if (!valid) {
