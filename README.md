@@ -1,4 +1,4 @@
-# jev-mobile-agent
+# jev-mobile-mcp
 
 **English** | [繁體中文](README.zh-TW.md)
 
@@ -100,7 +100,7 @@ An element with a ref is tapped by ref; one without (an OCR element) is tapped a
 **Setup**: without `TYPESAFE_API_KEY`, `mobile_tap` is not registered and nothing is sent to TypeSafe. `mobile_tap` lives on the `feat/jev-decision` branch. Put the server name **before** `-e`, otherwise `-e` swallows the name as another variable:
 
 ```bash
-claude mcp add jev-mobile -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision
+claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<your key> -- npx -y github:Yomiamy/jev-mobile-mcp#feat/jev-decision
 ```
 
 For a shared `.mcp.json`, reference the variable instead of committing the key: `"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`. `TYPESAFE_MODEL` overrides the model (default `jev-latest`).
@@ -159,7 +159,7 @@ A profile or release build makes mobilecli fall back to the accessibility dump, 
 Requires read access to this repo. `prepare` builds on install.
 
 ```bash
-claude mcp add jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements
+claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements
 ```
 
 Or commit a `.mcp.json` at your project root so teammates are prompted to enable it when they open the project:
@@ -167,10 +167,10 @@ Or commit a `.mcp.json` at your project root so teammates are prompted to enable
 ```json
 {
   "mcpServers": {
-    "jev-mobile": {
+    "jev-mobile-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements"]
+      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements"]
     }
   }
 }
@@ -179,16 +179,16 @@ Or commit a `.mcp.json` at your project root so teammates are prompted to enable
 **Updating**: npx reuses its cached install and does not pick up new commits on the branch. After pushing a new version, delete the cache and reconnect:
 
 ```bash
-grep -l 'jev-mobile-agent.git' ~/.npm/_npx/*/package-lock.json   # find the cache dir
+grep -l 'jev-mobile-mcp.git' ~/.npm/_npx/*/package-lock.json   # find the cache dir
 rm -rf ~/.npm/_npx/<that-dir>
-# then in Claude Code: /mcp → jev-mobile → Reconnect
+# then in Claude Code: /mcp → jev-mobile-mcp → Reconnect
 ```
 
 ### Local development
 
 ```bash
 npm ci && npm run build
-claude mcp add jev-mobile -- node /path/to/jev-mobile-agent/lib/index.js
+claude mcp add jev-mobile-mcp -- node /path/to/jev-mobile-mcp/lib/index.js
 ```
 
 After changing `src/`, run `npm run build` and reconnect in `/mcp`.

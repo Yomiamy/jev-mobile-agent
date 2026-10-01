@@ -1,4 +1,4 @@
-# jev-mobile-agent
+# jev-mobile-mcp
 
 [English](README.md) | **繁體中文**
 
@@ -100,7 +100,7 @@ robot 回報的方向只當退路，因為它不可靠：在 Pixel 6 模擬器�
 **設定**：沒有 `TYPESAFE_API_KEY` 時不會註冊 `mobile_tap`，也不會送出任何資料到 TypeSafe。`mobile_tap` 在 `feat/jev-decision` 分支上。server 名稱必須放在 `-e` **前面**，否則 `-e` 會把名稱也當成環境變數吃掉：
 
 ```bash
-claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-agent#feat/jev-decision
+claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomiamy/jev-mobile-mcp#feat/jev-decision
 ```
 
 共用的 `.mcp.json` 不要寫入 key，改為引用環境變數：`"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`。`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
@@ -159,7 +159,7 @@ claude mcp add jev-mobile -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:Yomi
 需要本 repo 的讀取權限。`prepare` 會在安裝時自動 build。
 
 ```bash
-claude mcp add jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements
+claude mcp add jev-mobile-mcp -- npx -y github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements
 ```
 
 或在專案根目錄提交 `.mcp.json`，讓團隊開啟專案時自動提示啟用：
@@ -167,10 +167,10 @@ claude mcp add jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-lis
 ```json
 {
   "mcpServers": {
-    "jev-mobile": {
+    "jev-mobile-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "github:Yomiamy/jev-mobile-agent#feat/ocr-list-elements"]
+      "args": ["-y", "github:Yomiamy/jev-mobile-mcp#feat/ocr-list-elements"]
     }
   }
 }
@@ -179,16 +179,16 @@ claude mcp add jev-mobile -- npx -y github:Yomiamy/jev-mobile-agent#feat/ocr-lis
 **更新版本**：npx 會沿用已安裝的快取，不會自動抓分支上的新 commit。push 新版後需刪除快取再重新連線：
 
 ```bash
-grep -l 'jev-mobile-agent.git' ~/.npm/_npx/*/package-lock.json   # 找出快取目錄
+grep -l 'jev-mobile-mcp.git' ~/.npm/_npx/*/package-lock.json   # 找出快取目錄
 rm -rf ~/.npm/_npx/<該目錄>
-# 接著在 Claude Code 執行 /mcp → jev-mobile → Reconnect
+# 接著在 Claude Code 執行 /mcp → jev-mobile-mcp → Reconnect
 ```
 
 ### 本機開發
 
 ```bash
 npm ci && npm run build
-claude mcp add jev-mobile -- node /path/to/jev-mobile-agent/lib/index.js
+claude mcp add jev-mobile-mcp -- node /path/to/jev-mobile-mcp/lib/index.js
 ```
 
 改完 `src/` 後 `npm run build`，再到 `/mcp` 重新連線即可生效。
