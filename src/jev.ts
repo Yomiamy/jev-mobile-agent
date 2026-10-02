@@ -1,4 +1,5 @@
 import { compactElements, currentViewport } from "./compact-elements";
+import { formatElements } from "./format-elements";
 import { isOcrSupported, mergeOcrElements, OcrScreen, readScreenText } from "./ocr";
 import { ActionableError, Dimensions, Robot, ScreenElement } from "./robot";
 
@@ -172,6 +173,7 @@ interface Reading {
 	choice: ElementChoice;
 	screen: Dimensions;
 	source: string;
+	elements: ScreenElement[];
 }
 
 // ocr elements already read are merged in, the screen is not read twice
@@ -179,7 +181,7 @@ const chooseFromTree = async (robot: Robot, target: string, ocr: ScreenElement[]
 	const tree = await robot.getElementsOnScreen();
 	const screen = await currentViewport(robot, tree);
 	const elements = compactElements(mergeOcrElements(tree, ocr), screen);
-	return { choice: await chooseElement(target, elements, screen), screen, source };
+	return { choice: await chooseElement(target, elements, screen), screen, source, elements };
 };
 
 // ocr first, it costs about a second where a flutter debug dump costs 6-10
@@ -198,7 +200,7 @@ const choose = async (robot: Robot, target: string, readOcr: OcrReader | null): 
 
 	const choice = await chooseElement(target, ocr.elements, ocr.screen);
 	if (isConfident(choice)) {
-		return { choice, screen: ocr.screen, source: "OCR" };
+		return { choice, screen: ocr.screen, source: "OCR", elements: ocr.elements };
 	}
 
 	return chooseFromTree(robot, target, ocr.elements, "OCR + accessibility tree");
@@ -211,11 +213,12 @@ const choose = async (robot: Robot, target: string, readOcr: OcrReader | null): 
  */
 export const tapByDescription = async (robot: Robot, target: string, readOcr: OcrReader | null = isOcrSupported() ? readScreenText : null): Promise<string> => {
 	for (let attempt = 1; ; attempt++) {
-		const { choice, screen, source } = await choose(robot, target, readOcr);
+		const { choice, screen, source, elements } = await choose(robot, target, readOcr);
 		const element = choice.element;
 		if (!element || !isConfident(choice)) {
 			const closest = choice.ranked.map(c => `${describeElement(c.element, screen)} (${c.probability.toFixed(2)})`).join(", ") || "none";
-			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}`);
+			const onScreen = elements.length > 0 ? `\n${formatElements(elements, "text")}` : " none";
+			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}\nElements on screen:${onScreen}`);
 		}
 
 		try {

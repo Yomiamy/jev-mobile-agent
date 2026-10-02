@@ -206,7 +206,41 @@ test.describe("tapByDescription", () => {
 		expect(error).toBeInstanceOf(ActionableError);
 		expect(error.message).toContain("Nothing tapped");
 		expect(error.message).toContain("searched accessibility tree");
+		expect(error.message).toContain("\nElements on screen:\nOne element per line:");
+		expect(error.message.split("\n")).toContain("@e2 Button label=\"登出\" at=42,1291 size=996x126");
 		expect(taps).toEqual([]);
+	});
+
+	test("NONE: lists the elements on screen after the first line, taps nothing", async () => { // tap-failure acceptance 1, 5
+		answerWith("NONE", 0.9);
+		const { robot, taps } = fakeRobot();
+		const error = await tapByDescription(robot, "設定", null).catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		const [first, heading, ...list] = error.message.split("\n");
+		expect(first).toBe("Nothing tapped: no element matches \"設定\" confidently (confidence 0.90, searched accessibility tree). Closest: none");
+		expect(heading).toBe("Elements on screen:");
+		expect(list).toContain("@e2 Button label=\"登出\" at=42,1291 size=996x126");
+		expect(taps).toEqual([]);
+	});
+
+	test("unsure after OCR and tree: OCR text is listed with tap coordinates", async () => { // tap-failure acceptance 3
+		answerWith("1", 0.2);
+		const { robot, taps } = fakeRobot();
+		const ocr = ocrReading(() => [{ ...myLocation, text: "關鍵字過濾" }]);
+		const error = await tapByDescription(robot, "設定", ocr.read).catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		expect(error.message.split("\n")).toContain("OcrText text=\"關鍵字過濾\" at=108,1140 size=216x60 tap=216,1170");
+		expect(taps).toEqual([]);
+	});
+
+	test("nothing on screen: says so instead of an empty list", async () => { // tap-failure acceptance 4
+		const requests = answerWith("1", 0.95);
+		const { robot, taps } = fakeRobot({ getElementsOnScreen: async () => [] });
+		const error = await tapByDescription(robot, "設定", ocrReading(() => []).read).catch(err => err);
+		expect(error).toBeInstanceOf(ActionableError);
+		expect(error.message).toMatch(/Closest: none\nElements on screen: none$/);
+		expect(error.message).not.toContain("One element per line");
+		expect([requests.length, taps.length]).toEqual([0, 0]);
 	});
 
 	test("taps the right half of a landscape screen the robot reports as portrait", async () => {
