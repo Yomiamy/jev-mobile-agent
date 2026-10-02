@@ -1,6 +1,6 @@
 # jev-mobile-mcp 發想與待辦
 
-（截至 2026-10-01）
+（截至 2026-10-02）
 
 狀態符號：⬜ 未開始 ｜ 🟡 進行中 ｜ ✅ 完成
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | A1 | OCR 補充無障礙樹（`list` 的 `ocr` 參數） | ✅ | macOS Vision，經 JXA 呼叫 |
 | A2 | 精簡元素清單（畫面外、空容器、重複 label） | ✅ | `compactElements`：只留目前畫面範圍內的元素、去掉空容器、只對多行合併 label 去重；有無 TypeSafe key 都生效，首頁約 −60% |
-| A3 | 由 Jev 依描述選擇點擊目標 | ✅ | `mobile_tap`，僅設定 `TYPESAFE_API_KEY` 時註冊；先用無障礙樹問 Jev，無把握再加 OCR，仍無把握就不點，ref 過期時重讀一次 |
+| A3 | 由 Jev 依描述選擇點擊目標 | ✅ | `mobile_tap`，僅設定 `TYPESAFE_API_KEY` 時註冊；server 在 macOS 時先用 OCR 問 Jev，無把握才讀無障礙樹並合併已讀的 OCR（不重跑 OCR），仍無把握就不點，ref 過期時重讀一次；Flutter debug app 的 10 步實測由 122 秒降到約 80–85 秒 |
 | A4 | 由 Jev 決定操作與目標，server 端自跑迴圈（`mobile_run_goal`） | ⬜ | 依 A3 的效果再評估 |
 | A5 | 等待條件（server 端輪詢直到畫面出現指定內容） | ⬜ | 取代 agent 自己反覆 `list` 確認畫面 |
 | B1 | 查清 `dump ui` 為何慢 | ✅ | 已查明：mobilecli 對可除錯的 Flutter app 改走 Dart VM service 走訪整棵 render tree（6–10 秒）；修正屬 mobilecli 範疇，profile build 的效果未量測 |
