@@ -78,7 +78,7 @@ OCR 元素沒有 ref，只能以座標點擊，沒有過期 ref 防護。現況�
 | 目標 | 現況 | OCR-first 後 |
 |---|---|---|
 | 「取消」（樹中為 Button） | `tapByRef(@e74)` | OCR 座標點擊（若 OCR 有把握） |
-| launcher「FindRestaurant」（樹中為 TextView） | `tapByRef` | 見 §5.4 |
+| launcher「FindRestaurant」（樹中為 TextView） | `tapByRef` | OCR 座標點擊（實測 10 輪皆是，見 §5.4） |
 | 側選單「關鍵字過濾」「我的位置」 | dump 後 OCR 座標點擊 | OCR 座標點擊（省掉 dump） |
 | 漢堡按鈕（無文字） | `tapByRef(@e65)` | OCR 無把握 → dump → `tapByRef`（多付 1–1.5 秒） |
 
@@ -89,7 +89,9 @@ OCR 元素沒有 ref，只能以座標點擊，沒有過期 ref 防護。現況�
 
 ### 5.4 畫面上有重複文字
 
-launcher 上桌面與 dock 各有一個「FindRestaurant」。只靠 OCR 時，兩個相同文字框會分散機率，Jev 很可能沒把握 → 退回 dump + 合併，由樹提供位置與 ref。此情況耗時等同現況再加 1–1.5 秒，不視為錯誤；若合併後仍分散，行為同現況（拒絕並附候選，agent 需改寫描述）。
+畫面上有兩個相同文字框時，只靠 OCR 會分散機率，Jev 很可能沒把握 → 退回 dump + 合併，由樹提供位置與 ref。此情況耗時等同現況再加 1–1.5 秒，不視為錯誤；若合併後仍分散，行為同現況（拒絕並附候選，agent 需改寫描述）。
+
+原本預期 launcher 的「FindRestaurant」會落入此情況（樹中桌面與 dock 各有一個 TextView）。實測（2026-10-01～02，10 輪）並非如此：dock 上的圖示畫面上沒有文字標籤，OCR 只讀到桌面那個被截斷的「FindRestaur..」，每次都只靠 OCR 選中（信心 0.57–0.75，以座標點擊），沒有退回 dump。
 
 ### 5.5 錯誤訊息
 
@@ -114,7 +116,7 @@ launcher 上桌面與 dock 各有一個「FindRestaurant」。只靠 OCR 時，�
 
 | 步驟 | 目標 | 現況 | OCR-first | 差異 |
 |---|---|---|---|---|
-| launcher 點 FindRestaurant | 原生、重複文字 | dump 0.7 秒 | OCR + dump（多半退回） | +1–1.5 秒 |
+| launcher 點 FindRestaurant | 原生、dock 圖示無文字標籤（見 §5.4） | dump 0.7 秒 | OCR（實測未退回） | 約 +0.3–0.8 秒 |
 | 漢堡選單 ×2 | Flutter、無文字圖示 | dump | OCR + dump | 每次 +1–1.5 秒 |
 | 關鍵字過濾、我的位置 | Flutter、只在 OCR | dump + OCR | OCR | 每次 −6–10 秒 |
 | 取消 | Flutter、文字 | dump | OCR | −5–9 秒 |
