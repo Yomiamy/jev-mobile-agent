@@ -739,7 +739,7 @@ export const createMcpServer = (): McpServer => {
 		tool(
 			"mobile_tap",
 			"Tap By Description",
-			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (accessibility tree, then OCR if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped and the closest candidates are returned; fall back to mobile_list_elements_on_screen then. Icons missing from the accessibility tree cannot be found this way.",
+			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (OCR first, then the accessibility tree if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped and the closest candidates are returned; fall back to mobile_list_elements_on_screen then. Icons missing from the accessibility tree cannot be found this way.",
 			{
 				device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
 				target: z.string().min(1).describe("Short description of the element to tap: its text, label, role, or position"),
