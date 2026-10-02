@@ -15,7 +15,24 @@ Upstream locates elements in only two ways:
 
 Many screens never put their text into the accessibility tree: a Flutter `Drawer` without semantics, canvas-drawn UI, text baked into images. Those used to fall straight through to screenshots.
 
-This repo adds OCR in between: **if the text is not in the tree, read text and positions locally with OCR first; take a screenshot only if that still fails.**
+This repo adds OCR on two paths, so a screenshot becomes the last resort:
+
+**`mobile_tap` (with a TypeSafe key): OCR first.** OCR costs about 1–1.5 s, while reading the tree of a Flutter debug build costs 6–10 s, so the tree is read only when OCR is not enough.
+
+```
+mobile_tap(target)
+        │
+        ▼
+OCR (screenshot + Vision)          ← read first; Jev picks the text
+        │ no confident match
+        ▼
+tree + OCR merged                  ← tree read only now; Jev asked again
+        │ still no confident match
+        ▼
+nothing tapped, candidates returned → agent falls back to the path below
+```
+
+**`mobile_list_elements_on_screen`: tree first, OCR on request.** `list` is the most frequent call, so OCR is never turned on by the server.
 
 ```
 list_elements_on_screen            ← accessibility tree (default)

@@ -15,7 +15,24 @@ Mobile agent testing by jev decision and ocr detection
 
 問題是很多畫面的文字根本不在無障礙樹裡——Flutter `Drawer` 沒輸出 semantics、canvas 繪製的 UI、文字嵌在圖片裡。這時只能退到截圖。
 
-本 repo 在兩者之間補上 OCR：**樹裡找不到文字，先在本機用 OCR 讀出文字與座標，還找不到才截圖。**
+本 repo 在兩條路徑上加入 OCR，讓截圖變成最後手段：
+
+**`mobile_tap`（有 TypeSafe key 時）：先 OCR。** OCR 約 1–1.5 秒，在 Flutter debug build 上讀無障礙樹卻要 6–10 秒，所以只有 OCR 不夠時才讀樹。
+
+```
+mobile_tap(target)
+        │
+        ▼
+OCR（截圖 + Vision）               ← 先讀，由 Jev 挑文字
+        │ 沒有把握的結果
+        ▼
+無障礙樹 + OCR 合併                ← 這時才讀樹，再問 Jev 一次
+        │ 仍然沒有把握
+        ▼
+不點擊，回傳候選 → agent 改走下方路徑
+```
+
+**`mobile_list_elements_on_screen`：先讀樹，OCR 需明確要求。** `list` 是最常呼叫的工具，server 不會自動開啟 OCR。
 
 ```
 list_elements_on_screen            ← 無障礙樹（預設）
