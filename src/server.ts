@@ -644,7 +644,7 @@ export const createMcpServer = (): McpServer => {
 	tool(
 		"mobile_click_on_screen_at_coordinates",
 		"Click Screen",
-		"Click on the screen, either at x,y coordinates or on an element by its ref (e.g. \"@e5\") from the latest mobile_list_elements_on_screen result. Prefer ref when the element is listed.",
+		"Click on the screen, either at x,y coordinates or on an element by its ref (e.g. \"@e5\") from the latest mobile_list_elements_on_screen result or failed mobile_tap result. Prefer ref when the element is listed.",
 		{
 			device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
 			x: z.coerce.number().min(0).optional().describe("The x coordinate to click on the screen, in pixels. Required unless ref is given"),
@@ -739,7 +739,7 @@ export const createMcpServer = (): McpServer => {
 		tool(
 			"mobile_tap",
 			"Tap By Description",
-			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (OCR first, then the accessibility tree if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped and the closest candidates are returned; fall back to mobile_list_elements_on_screen then. Icons missing from the accessibility tree cannot be found this way.",
+			"Tap the on-screen element that matches a short description, e.g. \"登出 button\" or \"menu button at the top left\". The server reads the screen (OCR first, then the accessibility tree if needed) and picks the element, so there is no need to list elements first. If nothing matches confidently, nothing is tapped; the closest candidates and the elements on screen are returned, so pick one of them and tap it with mobile_click_on_screen_at_coordinates (by ref, or at its tap= coordinates). Call mobile_list_elements_on_screen only if the screen has changed since. Icons missing from the accessibility tree cannot be found this way.",
 			{
 				device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you."),
 				target: z.string().min(1).describe("Short description of the element to tap: its text, label, role, or position"),
