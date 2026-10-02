@@ -269,6 +269,21 @@ test.describe("tapByDescription", () => {
 		expect(result).toContain("from accessibility tree)");
 	});
 
+	test("the default reader skips OCR when the server is not on macOS", async () => { // acceptance 6, default branch
+		answerWith("2", 0.95);
+		const { robot, taps, screenshots } = fakeRobot();
+		const platform = Object.getOwnPropertyDescriptor(process, "platform") as PropertyDescriptor;
+		Object.defineProperty(process, "platform", { value: "linux" });
+		try {
+			const result = await tapByDescription(robot, "登出");
+			expect(taps).toEqual(["@e2"]);
+			expect(screenshots()).toBe(0);
+			expect(result).toContain("from accessibility tree)");
+		} finally {
+			Object.defineProperty(process, "platform", platform);
+		}
+	});
+
 	test("a stale ref from the tree fallback reads the screen again from OCR", async () => { // acceptance 7
 		answerInTurn(["1", 0.2], ["2", 0.95]);
 		let first = true;
