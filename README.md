@@ -142,37 +142,40 @@ Design, trade-offs and full test records: [spec](docs/features/2026-10-01-jev-ta
 
 A 10-step flow on the Flutter app "FindRestaurant" on a Pixel 9a emulator (Android 17): terminate all apps → tap the app on the launcher → wait for load → scroll 100 px → open side menu → "關鍵字過濾" → "取消" → open side menu → "我的位置" → wait for reload. Budget 300 s per run, at most 2 retries per step. Five runs per server, each run in a fresh Claude Code subagent (Opus 5.5) so context does not accumulate across runs.
 
-| | upstream mobile-mcp | jev-mobile-mcp |
+| | upstream mobile-mcp 1.0.8 ³ | jev-mobile-mcp |
 |---|---:|---:|
 | Passed | 5 / 5 | 5 / 5 |
-| Avg time | 69.6 s | 70.0 s |
-| Avg model requests per run (Claude API) ² | 19 | 16 (−16%) |
-| Avg input-equivalent tokens per run ¹ | 201.8k | 166.3k (−18%) |
-| Steady state, runs 3–5 ¹ | 189k–190k | 141k–152k (≈ −22%) |
-| Avg output tokens per run | 1,025 | 517 (−50%) |
-| Retries, all runs | 4 (all on the launcher tap) | 0 |
+| Avg time | 137.2 s | 70.0 s (−49%) |
+| Avg model requests per run (Claude API) ² | 23.6 | 16 (−32%) |
+| Avg input-equivalent tokens per run ¹ | 295.3k | 166.3k (−44%) |
+| Steady state, runs 3–5 ¹ | 202k–336k | 141k–152k |
+| Avg output tokens per run | 1,575 | 517 (−67%) |
+| Retries, all runs | 2 (launcher tap, dialog "取消") | 0 |
 
-¹ From the `usage` of every model request in the subagent transcript, priced relative to plain input: cache read × 0.1 + cache write × 1.25 + input. Raw totals are much larger (1.2–1.6 M tokens per run) because every request resends the whole context, about 63k of which is fixed overhead (system prompt, tool definitions, project rules) before the first step. Run 1 of each server is higher because it writes that context to the cache.
+¹ From the `usage` of every model request in the subagent transcript, priced relative to plain input: cache read × 0.1 + cache write × 1.25 + input. Raw totals are much larger (1.2–2.6 M tokens per run) because every request resends the whole context, about 63k of which is fixed overhead (system prompt, tool definitions, project rules) before the first step. Runs that write that context to the cache (run 1 of each server, and upstream run 4) are higher.
 
 ² One request to the Claude Messages API, i.e. one model turn; counted as distinct assistant messages in the transcript. Not the number of MCP tool calls or device actions: one request can issue several tool calls, and one `mobile_batch_commands` can run many device steps.
 
+³ Upstream 1.0.8, installed as the Claude Code plugin (`/plugin install mobile-mcp@mobile-mcp`), run on 2026-10-03. The jev-mobile-mcp column was measured earlier and not rerun.
+
 - **Where the saving comes from**: the four text targets ("FindRestaurant", "關鍵字過濾", "取消", "我的位置") were each tapped by one `mobile_tap` (OCR, confidence 0.91–0.99), with no screenshot to locate them first. Fewer model requests means fewer resends of the context, which dominates the cost.
-- **Launcher tap**: with upstream, the agent tapped the icon center (≈ 919,1392) and the first tap was ignored in 4 of 5 runs. `mobile_tap` hit the label below it (923,1524) and launched the app on the first tap every time. Observed, root cause not verified.
-- **Time is the same**: both runs are bound by the app's load (several seconds of skeleton) and by screenshots lagging the screen by about 2 s, not by the tools.
-- **The hamburger button** has no label, so both servers tapped it by coordinates.
-- **Not a strictly equal comparison**: the jev-mobile-mcp prompt gave the hamburger button's coordinates, the upstream prompt did not; part of the difference in model requests may come from that.
+- **Why upstream took longer**: on this Flutter screen `mobile_list_elements_on_screen` usually did not show the open side menu, so the agent took screenshots and tapped coordinates read off them; screenshots often still showed the previous screen and had to be taken again. Every run also listed the 22–25 installed apps and terminated each one, since there is no tool for listing running apps.
+- **Launcher tap**: with upstream, the agent tapped the icon by ref; the first tap was ignored in 1 of 5 runs and worked when retried at the icon's coordinates. `mobile_tap` hit the label below the icon (923,1524) and launched the app on the first tap every time. Observed, root cause not verified.
+- **Wrong element by ref**: in upstream run 3, tapping the dialog's "取消" by ref (`@e77`) opened the Flutter Inspector instead of closing the dialog; the retry at screenshot coordinates worked. Root cause not verified.
+- **The hamburger button** has no label, so both servers tapped it by coordinates or ref.
+- **Not a strictly equal comparison**: the jev-mobile-mcp prompt gave the hamburger button's coordinates, the upstream prompt did not, and the two columns were measured at different times; part of the difference may come from that.
 
 #### Per-run data
 
-upstream mobile-mcp:
+upstream mobile-mcp 1.0.8 ³:
 
 | Run | Time | Model requests | Cache read | Cache write | Output | Input-equivalent ¹ | Retries |
 |---|---:|---:|---:|---:|---:|---:|---|
-| 1 | 76 s | 16 | 1,192,385 | 87,824 | 861 | 229.1k | 0 |
-| 2 | 70 s | 16 | 1,216,307 | 71,116 | 951 | 210.6k | 1 (launcher tap) |
-| 3 | 68 s | 21 | 1,629,442 | 21,585 | 1,147 | 190.0k | 1 (launcher tap) |
-| 4 | 67 s | 21 | 1,626,767 | 21,019 | 956 | 189.0k | 1 (launcher tap) |
-| 5 | 67 s | 21 | 1,631,465 | 21,648 | 1,210 | 190.2k | 1 (launcher tap) |
+| 1 | 97 s | 25 | 2,157,105 | 86,116 | 1,378 | 323.4k | 0 |
+| 2 | 219 s | 24 | 2,380,586 | 53,523 | 2,656 | 305.0k | 0 |
+| 3 | 189 s | 28 | 2,543,598 | 43,925 | 1,298 | 309.3k | 2 (launcher tap; "取消" by ref opened the Flutter Inspector) |
+| 4 | 93 s | 22 | 1,977,021 | 110,959 | 1,229 | 336.4k | 0 |
+| 5 | 88 s | 19 | 1,592,625 | 34,286 | 1,312 | 202.2k | 0 |
 
 jev-mobile-mcp:
 
@@ -184,7 +187,7 @@ jev-mobile-mcp:
 | 4 | 61 s | 15 | 1,155,368 | 20,749 | 511 | 141.5k | 0 |
 | 5 | 64 s | 16 | 1,243,856 | 21,952 | 494 | 151.9k | 0 |
 
-Plain input was 30–42 tokens per run and is left out.
+Plain input was 30–56 tokens per run and is left out.
 
 ### Why reading the screen is slow on Flutter debug builds
 
