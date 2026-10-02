@@ -15,7 +15,24 @@ Upstream locates elements in only two ways:
 
 Many screens never put their text into the accessibility tree: a Flutter `Drawer` without semantics, canvas-drawn UI, text baked into images. Those used to fall straight through to screenshots.
 
-This repo adds OCR in between: **if the text is not in the tree, read text and positions locally with OCR first; take a screenshot only if that still fails.**
+This repo adds OCR on two paths, so a screenshot becomes the last resort:
+
+**`mobile_tap` (with a TypeSafe key): OCR first.** OCR costs about 1–1.5 s, while reading the tree of a Flutter debug build costs 6–10 s, so the tree is read only when OCR is not enough.
+
+```
+mobile_tap(target)
+        │
+        ▼
+OCR (screenshot + Vision)          ← read first; Jev picks the text
+        │ no confident match
+        ▼
+tree + OCR merged                  ← tree read only now; Jev asked again
+        │ still no confident match
+        ▼
+nothing tapped, candidates returned → agent falls back to the path below
+```
+
+**`mobile_list_elements_on_screen`: tree first, OCR on request.** `list` is the most frequent call, so OCR is never turned on by the server.
 
 ```
 list_elements_on_screen            ← accessibility tree (default)
@@ -123,19 +140,51 @@ Design, trade-offs and full test records: [spec](docs/features/2026-10-01-jev-ta
 
 ## Field test
 
-An 11-step flow on the Flutter app "FindRestaurant" on a Pixel 6 emulator (open app → scroll → open side menu → keyword filter → cancel → my location → wait for reload), each run within the 120-second budget:
+A 10-step flow on the Flutter app "FindRestaurant" on a Pixel 9a emulator (Android 17): terminate all apps → tap the app on the launcher → wait for load → scroll 100 px → open side menu → "關鍵字過濾" → "取消" → open side menu → "我的位置" → wait for reload. Budget 300 s per run, at most 2 retries per step. Five runs per server, each run in a fresh Claude Code subagent (Opus 5.5) so context does not accumulate across runs.
 
-| | OCR, agent picks targets | `mobile_tap`, Jev picks targets |
+| | upstream mobile-mcp | jev-mobile-mcp |
 |---|---:|---:|
-| Total time | 77 s | 89 s |
-| Retries | 0 | 1 (two identical app icons) |
-| Tool results returned to the agent (estimate) | ≈ 49,600 chars | ≈ 8,500 chars (−80%) |
-| Screenshots | 0 | 0 |
+| Passed | 5 / 5 | 5 / 5 |
+| Avg time | 69.6 s | 70.0 s |
+| Avg model requests per run (Claude API) ² | 19 | 16 (−16%) |
+| Avg input-equivalent tokens per run ¹ | 201.8k | 166.3k (−18%) |
+| Steady state, runs 3–5 ¹ | 189k–190k | 141k–152k (≈ −22%) |
+| Avg output tokens per run | 1,025 | 517 (−50%) |
+| Retries, all runs | 4 (all on the launcher tap) | 0 |
 
-- The side menu items are **entirely absent** from the accessibility tree; OCR found them every time, and Jev picked them with confidence 0.92–0.95.
-- OCR and the accessibility tree agree on an element's center to within about 8px.
-- Rotation: with auto-rotate on and Chrome in landscape, the viewport is 2400x1080 and every element past x=1080 stays in the list; FindRestaurant in portrait stays 1080x2400.
-- The Jev run is not faster because every `mobile_tap` reads the screen again, and reading is slow on this app (see below). Jev itself takes about 0.3 s per request. The tokens are partly moved rather than saved: Jev reads the element list instead of the agent, and its usage is not recorded yet.
+¹ From the `usage` of every model request in the subagent transcript, priced relative to plain input: cache read × 0.1 + cache write × 1.25 + input. Raw totals are much larger (1.2–1.6 M tokens per run) because every request resends the whole context, about 63k of which is fixed overhead (system prompt, tool definitions, project rules) before the first step. Run 1 of each server is higher because it writes that context to the cache.
+
+² One request to the Claude Messages API, i.e. one model turn; counted as distinct assistant messages in the transcript. Not the number of MCP tool calls or device actions: one request can issue several tool calls, and one `mobile_batch_commands` can run many device steps.
+
+- **Where the saving comes from**: the four text targets ("FindRestaurant", "關鍵字過濾", "取消", "我的位置") were each tapped by one `mobile_tap` (OCR, confidence 0.91–0.99), with no screenshot to locate them first. Fewer model requests means fewer resends of the context, which dominates the cost.
+- **Launcher tap**: with upstream, the agent tapped the icon center (≈ 919,1392) and the first tap was ignored in 4 of 5 runs. `mobile_tap` hit the label below it (923,1524) and launched the app on the first tap every time. Observed, root cause not verified.
+- **Time is the same**: both runs are bound by the app's load (several seconds of skeleton) and by screenshots lagging the screen by about 2 s, not by the tools.
+- **The hamburger button** has no label, so both servers tapped it by coordinates.
+- **Not a strictly equal comparison**: the jev-mobile-mcp prompt gave the hamburger button's coordinates, the upstream prompt did not; part of the difference in model requests may come from that.
+
+#### Per-run data
+
+upstream mobile-mcp:
+
+| Run | Time | Model requests | Cache read | Cache write | Output | Input-equivalent ¹ | Retries |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1 | 76 s | 16 | 1,192,385 | 87,824 | 861 | 229.1k | 0 |
+| 2 | 70 s | 16 | 1,216,307 | 71,116 | 951 | 210.6k | 1 (launcher tap) |
+| 3 | 68 s | 21 | 1,629,442 | 21,585 | 1,147 | 190.0k | 1 (launcher tap) |
+| 4 | 67 s | 21 | 1,626,767 | 21,019 | 956 | 189.0k | 1 (launcher tap) |
+| 5 | 67 s | 21 | 1,631,465 | 21,648 | 1,210 | 190.2k | 1 (launcher tap) |
+
+jev-mobile-mcp:
+
+| Run | Time | Model requests | Cache read | Cache write | Output | Input-equivalent ¹ | Retries |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1 | 70 s | 16 | 1,179,745 | 85,262 | 475 | 224.6k | 0 |
+| 2 | 78 s | 17 | 1,331,514 | 23,022 | 619 | 162.0k | 0 |
+| 3 | 77 s | 16 | 1,242,288 | 21,766 | 485 | 151.5k | 0 |
+| 4 | 61 s | 15 | 1,155,368 | 20,749 | 511 | 141.5k | 0 |
+| 5 | 64 s | 16 | 1,243,856 | 21,952 | 494 | 151.9k | 0 |
+
+Plain input was 30–42 tokens per run and is left out.
 
 ### Why reading the screen is slow on Flutter debug builds
 
