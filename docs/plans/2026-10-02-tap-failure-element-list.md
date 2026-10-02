@@ -223,10 +223,6 @@ interface Reading {
 | 6 description 更新 | Task 1 Step 4 |
 | 7 不動 list、全測試與 lint | Task 1 Step 5 |
 
-## 已知殘留
-
-- `mobile_click_on_screen_at_coordinates` 的 description 仍寫 ref 來自「the latest mobile_list_elements_on_screen result」。`mobile_tap` 的 description 已明講用回傳的 ref 去 click，且 ref 事實上是最新一次 dump 的（spec §4.3）；規格未要求改 click 的說明，本案不動。實測若 agent 因此猶豫，再另案改。
-
 ## 執行方式
 
 - **subagent-driven**：Task 1 與 Task 2 寫入檔案不重疊，可由兩個 subagent 平行執行；Task 2 只依本計畫字句，不需等 Task 1。
