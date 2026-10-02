@@ -42,7 +42,7 @@ agent 找點擊目標的順序：
 | `src/ocr.ts` | 原尺寸截圖 → `osascript` JXA 呼叫 Vision → 正規化座標乘上螢幕尺寸換成 `OcrText` 元素 → 去掉樹中已有的文字後合併；`readScreenText` 不需要樹，畫面方向由截圖寬高決定，供 `mobile_tap` 先跑 OCR |
 | `src/format-elements.ts`（修改） | 沒有 ref 的元素（OCR、legacy robot）輸出中心點 `tap=x,y` |
 | `src/compact-elements.ts` | `currentViewport` 由 dump 的視窗根元素決定畫面範圍（找不到才退回 robot 回報的方向）；`compactElements` 只留範圍內、有內容的元素，多行合併 label 只留一次 |
-| `src/jev.ts` | `mobile_tap` 的流程 `tapByDescription`：元素表組成 TypeSafe Choice 問題交給 Jev 選擇，先 OCR、無把握才讀樹，仍無把握就不點；僅設定 `TYPESAFE_API_KEY` 時於 `server.ts` 註冊 |
+| `src/jev.ts` | `mobile_tap` 的流程 `tapByDescription`：元素表組成 TypeSafe Choice 問題交給 Jev 選擇，先 OCR、無把握才讀樹，仍無把握就不點，錯誤訊息附上候選與交給 Jev 的元素清單；僅設定 `TYPESAFE_API_KEY` 時於 `server.ts` 註冊 |
 
 ## 4. 主要資料流：`mobile_list_elements_on_screen`
 
@@ -53,7 +53,7 @@ compactElements(elements, currentViewport(robot, elements))
 formatElements(elements, format)      text：一行一個元素；json：陣列
 ```
 
-`mobile_tap`（`tapByDescription`）在 server 為 macOS 時先截圖跑 OCR 交給 Jev，有把握就以座標點擊、不 dump；無把握才 dump，與已讀的 OCR 元素合併後再問一次。OCR 失敗或非 macOS 時只讀樹。有 ref 用 ref 點擊，沒有則點可見部分的中心：
+`mobile_tap`（`tapByDescription`）在 server 為 macOS 時先截圖跑 OCR 交給 Jev，有把握就以座標點擊、不 dump；無把握才 dump，與已讀的 OCR 元素合併後再問一次。OCR 失敗或非 macOS 時只讀樹。有 ref 用 ref 點擊，沒有則點可見部分的中心。仍無把握時不點，錯誤訊息附上同一份精簡後的元素清單（`formatElements` text 格式），agent 直接以 `mobile_click_on_screen_at_coordinates` 點擊，不必再 `list`：
 
 ```
 readScreenText（截圖寬高定方向）→ Jev ─ 有把握 → tap
