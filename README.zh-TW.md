@@ -29,7 +29,7 @@ OCR（截圖 + Vision）               ← 先讀，由 Jev 挑文字
 無障礙樹 + OCR 合併                ← 這時才讀樹，再問 Jev 一次
         │ 仍然沒有把握
         ▼
-不點擊，回傳候選 → agent 改走下方路徑
+不點擊，回傳候選與元素清單 → agent 直接挑一個點
 ```
 
 **`mobile_list_elements_on_screen`：先讀樹，OCR 需明確要求。** `list` 是最常呼叫的工具，server 不會自動開啟 OCR。
@@ -111,7 +111,7 @@ robot 回報的方向只當退路，因為它不可靠：在 Pixel 6 模擬器�
 1. 先截圖跑 OCR，問 Jev 哪個文字符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。畫面方向由截圖本身判斷。OCR 很便宜（約 1–1.5 秒），在 Flutter debug build 上讀無障礙樹卻要 6–10 秒（見下方）。
 2. 找不到或信心不足 → 讀取無障礙樹並精簡（去掉畫面外的元素與空容器，子節點重複的多行（合併）label 只留一次），與第 1 步已讀到的 OCR 元素合併後再問一次，不會再跑第二次 OCR。
 3. server 不在 macOS 上執行（沒有 OCR），或截圖／OCR 失敗時，直接走第 2 步、只讀無障礙樹。
-4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，讓 agent 改用 `mobile_list_elements_on_screen`。
+4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，並附上 Jev 判斷所用的元素清單（格式同 `mobile_list_elements_on_screen`，含 OCR 文字），agent 可直接挑 ref 或 `tap=` 座標交給 `mobile_click_on_screen_at_coordinates`，不必再讀一次畫面。
 5. 讀取與點擊之間畫面變了（ref 失效）→ 重新讀取畫面與畫面範圍，再重試一次。
 
 有 ref 的元素用 ref 點擊；沒有 ref 的元素（OCR 元素）點擊它可見部分的中心，並保證落在畫面範圍內。Jev 只能從實際觀察到的元素中挑選，模型不會編造座標。agent 每一步只送一句短描述，不必讀 3,000–7,000 字元的元素清單。

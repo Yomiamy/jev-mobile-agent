@@ -29,7 +29,7 @@ OCR (screenshot + Vision)          ← read first; Jev picks the text
 tree + OCR merged                  ← tree read only now; Jev asked again
         │ still no confident match
         ▼
-nothing tapped, candidates returned → agent falls back to the path below
+nothing tapped, candidates + element list returned → agent picks one and clicks it
 ```
 
 **`mobile_list_elements_on_screen`: tree first, OCR on request.** `list` is the most frequent call, so OCR is never turned on by the server.
@@ -111,7 +111,7 @@ With a [TypeSafe](https://docs.typesafe.ai) API key, the server also registers `
 1. Take a screenshot, read its text with OCR and ask Jev which text matches `target` (one Choice question: one option per element, plus NONE). The orientation comes from the screenshot itself. OCR is cheap (about 1–1.5 s), while reading the accessibility tree takes 6–10 s on a Flutter debug build (see below).
 2. No match or low confidence → read the accessibility tree and compact it (drop off-screen elements and empty containers, keep a multi-line (merged) label repeated by child nodes only once), merge in the OCR elements from step 1 and ask once more. OCR does not run a second time.
 3. When the server does not run on macOS (no OCR), or the screenshot or OCR fails, go straight to step 2 with the accessibility tree only.
-4. Still no confident match → **nothing is tapped**; the closest candidates are returned so the agent can fall back to `mobile_list_elements_on_screen`.
+4. Still no confident match → **nothing is tapped**; the closest candidates are returned together with the element list Jev chose from (the same format as `mobile_list_elements_on_screen`, OCR text included), so the agent can pick a ref or `tap=` coordinates for `mobile_click_on_screen_at_coordinates` without reading the screen again.
 5. If the screen changed between reading and tapping (stale ref), read it again, including the viewport, and retry once.
 
 An element with a ref is tapped by ref; one without (an OCR element) is tapped at the center of its visible part, kept inside the viewport. Jev can only pick an observed element, so the model never makes up coordinates. The agent sends one short phrase instead of reading 3,000–7,000 characters of element list per step.
