@@ -220,6 +220,8 @@ test.describe("tapByDescription", () => {
 		expect(first).toBe("Nothing tapped: no element matches \"設定\" confidently (confidence 0.90, searched accessibility tree). Closest: none");
 		expect(heading).toBe("Elements on screen:");
 		expect(list).toContain("@e2 Button label=\"登出\" at=42,1291 size=996x126");
+		// the server appends ". Please fix the issue and try again.", keep it off the last element line
+		expect(list[list.length - 1]).toBe("Pick one and tap it with mobile_click_on_screen_at_coordinates");
 		expect(taps).toEqual([]);
 	});
 

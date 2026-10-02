@@ -217,7 +217,7 @@ export const tapByDescription = async (robot: Robot, target: string, readOcr: Oc
 		const element = choice.element;
 		if (!element || !isConfident(choice)) {
 			const closest = choice.ranked.map(c => `${describeElement(c.element, screen)} (${c.probability.toFixed(2)})`).join(", ") || "none";
-			const onScreen = elements.length > 0 ? `\n${formatElements(elements, "text")}` : " none";
+			const onScreen = elements.length > 0 ? `\n${formatElements(elements, "text")}\nPick one and tap it with mobile_click_on_screen_at_coordinates` : " none";
 			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}\nElements on screen:${onScreen}`);
 		}
 

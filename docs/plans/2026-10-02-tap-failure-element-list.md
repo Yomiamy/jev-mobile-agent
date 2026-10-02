@@ -177,10 +177,12 @@ interface Reading {
 		const element = choice.element;
 		if (!element || !isConfident(choice)) {
 			const closest = choice.ranked.map(c => `${describeElement(c.element, screen)} (${c.probability.toFixed(2)})`).join(", ") || "none";
-			const onScreen = elements.length > 0 ? `\n${formatElements(elements, "text")}` : " none";
+			const onScreen = elements.length > 0 ? `\n${formatElements(elements, "text")}\nPick one and tap it with mobile_click_on_screen_at_coordinates` : " none";
 			throw new ActionableError(`Nothing tapped: no element matches "${target}" confidently (confidence ${choice.confidence.toFixed(2)}, searched ${source}). Closest: ${closest}\nElements on screen:${onScreen}`);
 		}
 ```
+
+（STAGE 3 審查後追加收尾句：server 對 `ActionableError` 一律接 `. Please fix the issue and try again.`，沒有收尾句時會黏在清單最後一個元素行上。）
 
 - [ ] **Step 4: 改 `src/server.ts` 第 742 行**：把 `mobile_tap` description 換成上方「確切全文」（雙引號以 `\"` 跳脫）；同檔第 647 行 `mobile_click_on_screen_at_coordinates` description 換成上方對應字句。
 
