@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpHandler } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createMcpServer, getAgentVersion, getSdkVersion } from "./server";
 import { error } from "./logger";
 import { Request, Response } from "express";
 import { program } from "commander";
+
+const logMcpError = (err: Error) => {
+	error("Error handling MCP request: " + (err.stack ?? String(err)));
+};
 
 const startHttpServer = async (host: string, port: number) => {
 	// createMcpExpressApp applies express.json() and Host-header DNS rebinding
@@ -41,37 +46,19 @@ const startHttpServer = async (host: string, port: number) => {
 		});
 	}
 
-	const handleMcpRequest = async (req: Request, res: Response) => {
-		// Stateless Streamable HTTP: fresh server + transport per request
-		// (Smithery / horizontal-host friendly; no session affinity).
-		const server = createMcpServer();
-		try {
-			const transport = new NodeStreamableHTTPServerTransport({
-				sessionIdGenerator: undefined,
-			});
-			// Register cleanup first: the response can close before handleRequest resolves.
-			res.on("close", () => {
-				transport.close();
-				server.close();
-			});
-			await server.connect(transport);
-			await transport.handleRequest(req, res, req.body);
-		} catch (err: unknown) {
-			error("Error handling MCP request: " + (err instanceof Error ? err.stack : String(err)));
-			if (!res.headersSent) {
-				res.status(500).json({
-					jsonrpc: "2.0",
-					error: {
-						code: -32603,
-						message: "Internal server error",
-					},
-					id: null,
-				});
-			}
-		}
-	};
+	// createMcpHandler serves both protocol eras from one factory: requests
+	// carrying the per-request `_meta` envelope (revision 2026-07-28, answered
+	// with `server/discover` and the modern result vocabulary) get a fresh
+	// era-marked instance, and legacy `initialize` traffic is served stateless
+	// from the same factory — the same per-request model as before.
+	// onerror keeps request-handling and transport failures in the application
+	// log (the SDK otherwise answers HTTP 500 silently).
+	const handler = createMcpHandler(() => createMcpServer(), { onerror: logMcpError });
+	const node = toNodeHandler(handler, { onerror: logMcpError });
 
-	app.post("/mcp", handleMcpRequest);
+	app.post("/mcp", (req: Request, res: Response) => {
+		void node(req, res, req.body);
+	});
 
 	// Stateless mode has no long-lived sessions; GET (SSE stream) and DELETE
 	// (session teardown) are not applicable. Return 405 per SDK guidance.
@@ -96,10 +83,13 @@ const startHttpServer = async (host: string, port: number) => {
 
 const startStdioServer = async () => {
 	try {
-		const transport = new StdioServerTransport();
-
-		const server = createMcpServer();
-		await server.connect(transport);
+		// serveStdio owns the transport and the era decision for the
+		// connection: a `server/discover` probe (revision 2026-07-28) pins
+		// the connection modern, while an `initialize` handshake keeps
+		// serving the 2025-era protocol exactly as before. The factory runs
+		// lazily on the first message, so a failing createMcpServer() surfaces
+		// through onerror rather than the catch below.
+		serveStdio(() => createMcpServer(), { onerror: logMcpError });
 
 		// Exit cleanly on termination signals so node flushes pending work
 		// (including NODE_V8_COVERAGE output). Node's default SIGINT/SIGTERM
