@@ -1,5 +1,5 @@
 import { compactElements, currentViewport } from "./compact-elements";
-import { isOcrSupported, withOcrElements } from "./ocr";
+import { isOcrSupported, mergeOcrElements, OcrScreen, readScreenText } from "./ocr";
 import { ActionableError, Dimensions, Robot, ScreenElement } from "./robot";
 
 const TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone";
@@ -166,22 +166,52 @@ const describeElement = (element: ScreenElement, screen: Dimensions): string => 
 	return `${element.ref ? `${element.ref} ` : ""}${shortType(element.type)} "${name}" at ${x},${y}`;
 };
 
-/**
- * Reads the screen, lets Jev pick the element matching `target` (adding OCR
- * text when the tree has no confident match) and taps it. Taps nothing when
- * unsure; reads the screen once more when the chosen ref went stale.
- */
-export const tapByDescription = async (robot: Robot, target: string): Promise<string> => {
-	for (let attempt = 1; ; attempt++) {
-		const tree = await robot.getElementsOnScreen();
-		const screen = await currentViewport(robot, tree);
-		let source = "accessibility tree";
-		let choice = await chooseElement(target, compactElements(tree, screen), screen);
-		if (!isConfident(choice) && isOcrSupported()) {
-			source = "accessibility tree + OCR";
-			choice = await chooseElement(target, compactElements(await withOcrElements(robot, tree), screen), screen);
-		}
+export type OcrReader = (robot: Robot) => Promise<OcrScreen>;
 
+interface Reading {
+	choice: ElementChoice;
+	screen: Dimensions;
+	source: string;
+}
+
+// ocr elements already read are merged in, the screen is not read twice
+const chooseFromTree = async (robot: Robot, target: string, ocr: ScreenElement[], source: string): Promise<Reading> => {
+	const tree = await robot.getElementsOnScreen();
+	const screen = await currentViewport(robot, tree);
+	const elements = compactElements(mergeOcrElements(tree, ocr), screen);
+	return { choice: await chooseElement(target, elements, screen), screen, source };
+};
+
+// ocr first, it costs about a second where a flutter debug dump costs 6-10
+const choose = async (robot: Robot, target: string, readOcr: OcrReader | null): Promise<Reading> => {
+	if (!readOcr) {
+		return chooseFromTree(robot, target, [], "accessibility tree");
+	}
+
+	let ocr: OcrScreen;
+	try {
+		ocr = await readOcr(robot);
+	} catch (err: any) {
+		// a failed screenshot or vision run must not block a target the tree has
+		return chooseFromTree(robot, target, [], `accessibility tree (OCR failed: ${err?.message ?? err})`);
+	}
+
+	const choice = await chooseElement(target, ocr.elements, ocr.screen);
+	if (isConfident(choice)) {
+		return { choice, screen: ocr.screen, source: "OCR" };
+	}
+
+	return chooseFromTree(robot, target, ocr.elements, "OCR + accessibility tree");
+};
+
+/**
+ * Lets Jev pick the element matching `target` from OCR text first and from the
+ * accessibility tree (merged with that OCR text) only when unsure, then taps it.
+ * Taps nothing when unsure; reads the screen once more when the chosen ref went stale.
+ */
+export const tapByDescription = async (robot: Robot, target: string, readOcr: OcrReader | null = isOcrSupported() ? readScreenText : null): Promise<string> => {
+	for (let attempt = 1; ; attempt++) {
+		const { choice, screen, source } = await choose(robot, target, readOcr);
 		const element = choice.element;
 		if (!element || !isConfident(choice)) {
 			const closest = choice.ranked.map(c => `${describeElement(c.element, screen)} (${c.probability.toFixed(2)})`).join(", ") || "none";

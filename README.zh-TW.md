@@ -62,7 +62,7 @@ OcrText text="設定" at=146,1360 size=91x46 tap=192,1383
 
 ### 何時會觸發
 
-由 agent 依工具說明判斷，server 不自動開啟（`list` 是最常呼叫的工具，每次都跑 OCR 會拖慢所有操作）：
+由 agent 依工具說明判斷，server 不會替 `list` 自動開啟（`list` 是最常呼叫的工具，每次都跑 OCR 會拖慢所有操作）。`mobile_tap` 則不同，每次點擊都先跑 OCR（見下方）。`list` 的觸發時機：
 
 - 上一次 list 找不到要點的文字 → 帶 `ocr: true` 重新 list。
 - 無障礙樹完全為空時，回傳內容會附上 `Retry with ocr: true` 提示。
@@ -86,12 +86,14 @@ robot 回報的方向只當退路，因為它不可靠：在 Pixel 6 模擬器�
 ```jsonc
 // mobile_tap
 { "device": "Pixel_6", "target": "左上角的選單按鈕" }
-// → Tapped @e65 Button "" at 74,202 (confidence 0.88, from accessibility tree)
+// → Tapped @e65 Button "" at 74,202 (confidence 0.62, from OCR + accessibility tree)
+{ "device": "Pixel_6", "target": "關鍵字過濾" }
+// → Tapped OcrText "關鍵字過濾" at 257,663 (confidence 0.81, from OCR)
 ```
 
-1. 讀取無障礙樹並精簡：去掉畫面外的元素與空容器，子節點重複的多行（合併）label 只留一次。
-2. 問 Jev 哪個元素符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。
-3. 找不到或信心不足 → 加上 OCR 元素再問一次。
+1. 先截圖跑 OCR，問 Jev 哪個文字符合 `target`（一個 Choice 問題：每個元素一個選項，外加 NONE）。畫面方向由截圖本身判斷。OCR 很便宜（約 1–1.5 秒），在 Flutter debug build 上讀無障礙樹卻要 6–10 秒（見下方）。
+2. 找不到或信心不足 → 讀取無障礙樹並精簡（去掉畫面外的元素與空容器，子節點重複的多行（合併）label 只留一次），與第 1 步已讀到的 OCR 元素合併後再問一次，不會再跑第二次 OCR。
+3. server 不在 macOS 上執行（沒有 OCR），或截圖／OCR 失敗時，直接走第 2 步、只讀無障礙樹。
 4. 仍然沒有把握 → **不點擊**，回傳最接近的候選，讓 agent 改用 `mobile_list_elements_on_screen`。
 5. 讀取與點擊之間畫面變了（ref 失效）→ 重新讀取畫面與畫面範圍，再重試一次。
 
@@ -105,11 +107,13 @@ claude mcp add jev-mobile-mcp -e TYPESAFE_API_KEY=<你的 key> -- npx -y github:
 
 共用的 `.mcp.json` 不要寫入 key，改為引用環境變數：`"env": { "TYPESAFE_API_KEY": "${TYPESAFE_API_KEY}" }`。`TYPESAFE_MODEL` 可覆寫使用的模型（預設 `jev-latest`）。
 
-> **隱私**：`mobile_tap` 會把畫面上元素的文字（使用 OCR 時連同 OCR 文字）送到 TypeSafe。畫面可能含有帳號 email 等個人資料，請只在可接受的情境啟用。
+> **隱私**：`mobile_tap` 每次點擊都會把 OCR 讀到的畫面文字送到 TypeSafe，需要讀無障礙樹時連同元素文字一起送出。畫面可能含有帳號 email 等個人資料，請只在可接受的情境啟用。
 
 限制：
 
 - 不在無障礙樹裡的圖示找不到（OCR 只讀文字）。
+- 圖示目標與原生畫面（launcher 讀樹只要 0.7 秒）每次點擊會多花約 1–1.5 秒：OCR 先跑一次沒把握，才去讀樹。
+- 文字目標只靠 OCR 就有把握時，改用座標點擊，即使樹裡有 ref（例如對話框的「取消」）也一樣，因此沒有下方 ref 失效的保護。
 - 畫面上有兩個相同的目標（例如桌面和 dock 上同一個 app 圖示）時，機率會被分散而拒絕點擊；請把描述寫得更具體，例如加上位置。
 - 沒有 label 的按鈕只能靠位置判斷，信心偏低（實測 0.60–0.66）。在 app 端補上 `tooltip` / `Semantics(label:)` 即可改善。
 - 信心門檻 0.5 是手動訂的，應依實測紀錄調整。
